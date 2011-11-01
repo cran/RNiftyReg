@@ -9,10 +9,12 @@ The \code{niftyreg} function performs registration for two and three dimensional
 
 \usage{
 niftyreg(source, target, targetMask = NULL, initAffine = NULL,
-           scope = c("affine","rigid"), nLevels = 3, maxIterations = 5,
-           useBlockPercentage = 50, finalInterpolation = 3, verbose = FALSE)
+         scope = c("affine","rigid"), nLevels = 3, maxIterations = 5,
+         useBlockPercentage = 50, finalInterpolation = 3,
+         verbose = FALSE, interpolationPrecision = NULL)
 
-applyAffine(affine, source, target, affineType = NULL, finalInterpolation = 3)
+applyAffine(affine, source, target, affineType = NULL,
+            finalInterpolation = 3, interpolationPrecision = NULL)
 }
 
 \arguments{
@@ -26,6 +28,7 @@ applyAffine(affine, source, target, affineType = NULL, finalInterpolation = 3)
   \item{useBlockPercentage}{A single integer giving the percentage of blocks to use for calculating correspondence at each step of the algorithm. The blocks with the highest intensity variance will be chosen.}
   \item{finalInterpolation}{A single integer specifying the type of interpolation to be applied to the final resampled image. May be 0 (nearest neighbour), 1 (trilinear) or 3 (cubic spline). No other values are valid.}
   \item{verbose}{A single logical value: if \code{TRUE}, the code will give some feedback on its progress; otherwise, nothing will be output while the algorithm runs.}
+  \item{interpolationPrecision}{The precision of the final, interpolated image: a single character string, or \code{NULL}. See Details.}
   \item{affine}{For \code{applyAffine}, the affine transformation to apply to the source image.}
   \item{affineType}{For \code{applyAffine}, the storage convention type of the affine matrix, if it is not stored in the \code{affineType} attribute of the matrix.}
 }
@@ -39,6 +42,8 @@ In the NiftyReg implementation, normalised cross-correlation between the target 
 
 The source image may have 2, 3 or 4 dimensions, and the target 2 or 3. The dimensionality of the target image determines whether 2D or 3D registration is applied, and source images with one more dimension than the target (i.e. 4D to 3D, or 3D to 2D) will be registered volumewise or slicewise, as appropriate. In the latter case the last dimension of the resulting image is taken from the source image, while all other dimensions come from the target. One affine matrix is returned for each registration performed.
 
+Greater precision may be appropriate for the final interpolated image than is used the source image. In particular, if the source image is integer-valued, then interpolation will generally produce nonintegral data values in the final image. The precision of the final image therefore defaults to being the same as the source image if nearest neighbour interpolation is requested (i.e. with \code{finalInterpolation=0}), and single-precision floating point otherwise. This default is chosen if the \code{interpolationPrecision} parameter is \code{NULL}: alternatively, one of \code{"source"} (for the same as the source image), \code{"single"} (for single-precision floating point) or \code{"double"} (for double-precision) may be specified explicitly.
+
 The \code{applyAffine} function is a convenience wrapper that calls \code{niftyreg} with \code{nLevels=0} to apply the specified transformation without any further optimisation. Note that a target image must still be specified in this case, since the metadata associated with that image is needed by \code{niftyreg}.
 }
 
@@ -46,6 +51,7 @@ The \code{applyAffine} function is a convenience wrapper that calls \code{niftyr
 For both functions, a list of class \code{"niftyreg"} with components
 \item{image}{An image object of class \code{"nifti"} representing the registered and resampled \code{source} image in the space of the \code{target} image.}
 \item{affine}{A list of 4x4 matrices containing the optimised affine transformations for each slice or volume of the source image. If the target is a 2D image, elements involving the Z dimension will have no effect.}
+\item{iterations}{A list of integer vectors giving the number of iterations actually run within each level, for each slice or volume of the source image. Note that for the first level specifically, twice the specified number of iterations is allowed.}
 \item{scope}{Copied from the function argument of the same name.}
 }
 

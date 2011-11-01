@@ -15,7 +15,9 @@
 #include <iostream>
 #include <limits>
 
-
+#ifdef RNIFTYREG
+#include <R.h>
+#endif
 
 void copy_transformation_4x4(const mat44 & source, mat44 & dest)
 {
@@ -287,13 +289,21 @@ void initialise_block_matching_method(  nifti_image * target,
                 case NIFTI_TYPE_FLOAT64:
         _reg_set_active_blocks<double>(target, params, mask, runningOnGPU);break;
                 default:
+#ifdef RNIFTYREG
+        error("The target image data type is not supported");
+#else
         fprintf(stderr,"ERROR\tinitialise_block_matching_method\tThe target image data type is not supported\n");
         exit(1);
+#endif
     }
     if(params->activeBlockNumber<2){
+#ifdef RNIFTYREG
+        error("There are no active blocks");
+#else
         fprintf(stderr,"There are no active blocks\n");
         fprintf(stderr,"... Exit ...\n");
         exit(1);
+#endif
     }
 #ifndef NDEBUG
     printf("[DEBUG]: There are %i active block(s) out of %i.\n", params->activeBlockNumber, params->blockNumber[0]*params->blockNumber[1]*params->blockNumber[2]);
@@ -1239,7 +1249,6 @@ void optimize_affine2D(_reg_blockMatchingParam * params,
         distance = 0.0;
         i = 0;
         top_points.clear();
-        int initial_size = queue.size();
 
         for (std::multimap<double, _reg_sorted_point2D>::iterator it = queue.begin();
         it != queue.end(); ++it, ++i)
@@ -1755,7 +1764,6 @@ void optimize_rigid2D(  _reg_blockMatchingParam *params,
         distance = 0.0;
         i = 0;
         top_points.clear();
-        int initial_size = queue.size();
         for (std::multimap<double, _reg_sorted_point2D>::iterator it = queue.begin();
         it != queue.end(); ++it, ++i)
         {
