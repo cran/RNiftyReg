@@ -1,9 +1,13 @@
-// Registration types (degrees of freedom)
+// Registration types (degrees of freedom) - these constants have to have these values
 #define RIGID 0
 #define AFFINE 1
 
-// Working precision for the source and target images
-#define PRECISION_TYPE float
+// Precision levels for final interpolation
+#define INTERP_PREC_SOURCE 0
+#define INTERP_PREC_DOUBLE 1
+
+// Working precision for the source and target images: float and double are valid for the NiftyReg code
+#define PRECISION_TYPE double
 
 // Convergence criterion
 #define CONVERGENCE_EPS 0.00001
@@ -20,10 +24,10 @@
 #include "niftyreg.h"
 
 extern "C"
-SEXP reg_aladin (SEXP source, SEXP target, SEXP type, SEXP nLevels, SEXP maxIterations, SEXP useBlockPercentage, SEXP finalInterpolation, SEXP targetMask, SEXP affineComponents, SEXP verbose)
+SEXP reg_aladin (SEXP source, SEXP target, SEXP type, SEXP finalPrecision, SEXP nLevels, SEXP maxIterations, SEXP useBlockPercentage, SEXP finalInterpolation, SEXP targetMask, SEXP affineComponents, SEXP verbose)
 {
-    int i, j;
-    SEXP returnValue, data;
+    int i, j, levels = *(INTEGER(nLevels));
+    SEXP returnValue, data, completedIterations;
     
     bool affineProvided = !isNull(affineComponents);
     
@@ -46,19 +50,22 @@ SEXP reg_aladin (SEXP source, SEXP target, SEXP type, SEXP nLevels, SEXP maxIter
     }
     
     int regType = (strcmp(CHAR(STRING_ELT(type,0)),"rigid")==0 ? RIGID : AFFINE);
+    int precisionType = (strcmp(CHAR(STRING_ELT(finalPrecision,0)),"source")==0 ? INTERP_PREC_SOURCE : INTERP_PREC_DOUBLE);
     
-    aladin_result result = do_reg_aladin(sourceImage, targetImage, regType, *(INTEGER(nLevels)), *(INTEGER(maxIterations)), *(INTEGER(useBlockPercentage)), *(INTEGER(finalInterpolation)), targetMaskImage, affineTransformation, (*(INTEGER(verbose)) == 1));
+    aladin_result result = do_reg_aladin(sourceImage, targetImage, regType, precisionType, *(INTEGER(nLevels)), *(INTEGER(maxIterations)), *(INTEGER(useBlockPercentage)), *(INTEGER(finalInterpolation)), targetMaskImage, affineTransformation, (*(INTEGER(verbose)) == 1));
     
-    PROTECT(returnValue = NEW_LIST(2));
+    PROTECT(returnValue = NEW_LIST(3));
     
     if (result.image->datatype == DT_INT32)
     {
+        // Integer-valued data went in, and precision must be "source"
         PROTECT(data = NEW_INTEGER((R_len_t) result.image->nvox));
         for (size_t i = 0; i < result.image->nvox; i++)
             INTEGER(data)[i] = ((int *) result.image->data)[i];
     }
     else
     {
+        // All other cases
         PROTECT(data = NEW_NUMERIC((R_len_t) result.image->nvox));
         for (size_t i = 0; i < result.image->nvox; i++)
             REAL(data)[i] = ((double *) result.image->data)[i];
@@ -67,16 +74,20 @@ SEXP reg_aladin (SEXP source, SEXP target, SEXP type, SEXP nLevels, SEXP maxIter
     SET_ELEMENT(returnValue, 0, data);
     
     if (!affineProvided)
-    {
         PROTECT(affineComponents = NEW_NUMERIC(16));
-        for (i = 0; i < 4; i++)
-        {
-            for (j = 0; j < 4; j++)
-                REAL(affineComponents)[(j*4)+i] = (double) result.affine->m[i][j];
-        }
+    for (i = 0; i < 4; i++)
+    {
+        for (j = 0; j < 4; j++)
+            REAL(affineComponents)[(j*4)+i] = (double) result.affine->m[i][j];
     }
     
     SET_ELEMENT(returnValue, 1, affineComponents);
+    
+    PROTECT(completedIterations = NEW_INTEGER(levels));
+    for (i = 0; i < levels; i++)
+        INTEGER(completedIterations)[i] = result.completedIterations[i];
+    
+    SET_ELEMENT(returnValue, 2, completedIterations);
     
     nifti_image_free(sourceImage);
     nifti_image_free(targetImage);
@@ -85,7 +96,7 @@ SEXP reg_aladin (SEXP source, SEXP target, SEXP type, SEXP nLevels, SEXP maxIter
     nifti_image_free(result.image);
     free(result.affine);
     
-    UNPROTECT(affineProvided ? 2 : 3);
+    UNPROTECT(affineProvided ? 3 : 4);
     
     return returnValue;
 }
@@ -156,7 +167,7 @@ nifti_image * s4_image_to_struct (SEXP object)
         header.datatype = DT_FLOAT64;  // This assumes that sizeof(double) == 8
     else
     {
-        fprintf(stderr, "** ERROR: Data type %d is not supported\n", header.datatype);
+        error("Data type %d is not supported", header.datatype);
         return NULL;
     }
     
@@ -228,13 +239,15 @@ nifti_image * create_position_field (nifti_image *templateImage, bool twoDimRegi
 }
 
 // Run the "aladin" registration algorithm
-aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage, int type, int nLevels, int maxIterations, int useBlockPercentage, int finalInterpolation, nifti_image *targetMaskImage, mat44 *affineTransformation, bool verbose)
+aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage, int type, int finalPrecision, int nLevels, int maxIterations, int useBlockPercentage, int finalInterpolation, nifti_image *targetMaskImage, mat44 *affineTransformation, bool verbose)
 {
     int i;
     bool usingTargetMask = (targetMaskImage != NULL);
     bool twoDimRegistration = (sourceImage->nz == 1 || targetImage->nz == 1);
     float sourceBGValue = 0.0;
     nifti_image *resultImage, *positionFieldImage = NULL;
+    
+    int *completedIterations = (int *) calloc(nLevels, sizeof(int));
     
     // Initial affine matrix is the identity
     if (affineTransformation == NULL)
@@ -337,28 +350,30 @@ aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage,
         if (verbose)
         {
             // Display some parameters specific to the current level
-            printf("Current level %i / %i\n", level+1, nLevels);
-            printf("Target image size: \t%ix%ix%i voxels\t%gx%gx%g mm\n", targetImageCopy->nx, targetImageCopy->ny, targetImageCopy->nz, targetImageCopy->dx, targetImageCopy->dy, targetImageCopy->dz);
-            printf("Source image size: \t%ix%ix%i voxels\t%gx%gx%g mm\n", sourceImageCopy->nx, sourceImageCopy->ny, sourceImageCopy->nz, sourceImageCopy->dx, sourceImageCopy->dy, sourceImageCopy->dz);
+            Rprintf("Current level %i / %i\n", level+1, nLevels);
+            Rprintf("Target image size: \t%ix%ix%i voxels\t%gx%gx%g mm\n", targetImageCopy->nx, targetImageCopy->ny, targetImageCopy->nz, targetImageCopy->dx, targetImageCopy->dy, targetImageCopy->dz);
+            Rprintf("Source image size: \t%ix%ix%i voxels\t%gx%gx%g mm\n", sourceImageCopy->nx, sourceImageCopy->ny, sourceImageCopy->nz, sourceImageCopy->dx, sourceImageCopy->dy, sourceImageCopy->dz);
             if (twoDimRegistration)
-                printf("Block size = [4 4 1]\n");
+                Rprintf("Block size = [4 4 1]\n");
             else
-                printf("Block size = [4 4 4]\n");
-            printf("Block number = [%i %i %i]\n", blockMatchingParams.blockNumber[0], blockMatchingParams.blockNumber[1], blockMatchingParams.blockNumber[2]);
-            printf("* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *\n");
+                Rprintf("Block size = [4 4 4]\n");
+            Rprintf("Block number = [%i %i %i]\n", blockMatchingParams.blockNumber[0], blockMatchingParams.blockNumber[1], blockMatchingParams.blockNumber[2]);
+            Rprintf("* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *\n");
             reg_mat44_disp(affineTransformation, (char *) "Initial affine transformation");
         }
 
         int nLoops = ((type==AFFINE && level==0) ? 2 : 1);
-        int currentType, iteration = 0;
+        int currentType, iteration;
         mat44 updateAffineMatrix;
         
         for (i = 0; i < nLoops; i++)
         {
+            // The first optimisation is rigid even if the final scope is affine
             currentType = ((i==0 && nLoops==2) ? RIGID : type);
+            iteration = 0;
             
             // Twice as many iterations are performed during the first level
-            while (iteration < (level==0 ? maxIterations : 2*maxIterations))
+            while (iteration < (level==0 ? 2*maxIterations : maxIterations))
             {
                 // Compute the affine transformation deformation field
                 reg_affine_positionField(affineTransformation, targetImageCopy, positionFieldImage);
@@ -366,7 +381,7 @@ aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage,
                 // Resample the source image
                 reg_resampleSourceImage<PRECISION_TYPE>(targetImageCopy, sourceImageCopy, resultImage, positionFieldImage, targetMask, 1, sourceBGValue);
                 
-                // Compute the correspondances between blocks
+                // Compute the correspondances between blocks - this is the expensive bit
                 block_matching_method<PRECISION_TYPE>(targetImageCopy, resultImage, &blockMatchingParams, targetMask);
                 
                 // Optimise the update matrix
@@ -381,6 +396,8 @@ aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage,
                 iteration++;
             }
         }
+        
+        completedIterations[level] = iteration;
 
         free(targetMask);
         nifti_image_free(resultImage);
@@ -393,7 +410,7 @@ aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage,
         if (verbose)
         {
             reg_mat44_disp(affineTransformation, (char *)"Final affine transformation");
-            printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
+            Rprintf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
         }
     }
     
@@ -402,6 +419,10 @@ aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage,
     
     // The corresponding deformation field is evaluated and saved
     reg_affine_positionField(affineTransformation, targetImage, positionFieldImage);
+    
+    // The source data type is changed for precision if requested
+    if (finalPrecision == INTERP_PREC_DOUBLE)
+        reg_changeDatatype<double>(sourceImage);
 
     // The result image is resampled using a cubic spline interpolation
     resultImage = nifti_copy_nim_info(targetImage);
@@ -412,13 +433,14 @@ aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage,
     resultImage->datatype = sourceImage->datatype;
     resultImage->nbyper = sourceImage->nbyper;
     resultImage->data = calloc(resultImage->nvox, resultImage->nbyper);
-    reg_resampleSourceImage<double>(targetImage, sourceImage, resultImage, positionFieldImage, NULL, finalInterpolation, sourceBGValue);
+    reg_resampleSourceImage<PRECISION_TYPE>(targetImage, sourceImage, resultImage, positionFieldImage, NULL, finalInterpolation, sourceBGValue);
     
     nifti_image_free(positionFieldImage);
     
     aladin_result result;
     result.image = resultImage;
     result.affine = affineTransformation;
+    result.completedIterations = completedIterations;
     
     return result;
 }
