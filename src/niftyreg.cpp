@@ -12,19 +12,27 @@
 // Convergence criterion
 #define CONVERGENCE_EPS 0.00001
 
+#define JH_TRI 0
+#define JH_PARZEN_WIN 1
+#define JH_PW_APPROX 2
+
+#define FOLDING_CORRECTION_STEP 20
+
 #include "_reg_resampling.h"
-#include "_reg_affineTransformation.h"
+#include "_reg_globalTransformation.h"
 #include "_reg_blockMatching.h"
 #include "_reg_tools.h"
+#include "_reg_f3d.h"
 
 #include <R.h>
 #include <Rdefines.h>
 #include <Rinternals.h>
 
 #include "niftyreg.h"
+#include "substitutions.h"
 
 extern "C"
-SEXP reg_aladin (SEXP source, SEXP target, SEXP type, SEXP finalPrecision, SEXP nLevels, SEXP maxIterations, SEXP useBlockPercentage, SEXP finalInterpolation, SEXP targetMask, SEXP affineComponents, SEXP verbose)
+SEXP reg_aladin_R (SEXP source, SEXP target, SEXP type, SEXP finalPrecision, SEXP nLevels, SEXP maxIterations, SEXP useBlockPercentage, SEXP finalInterpolation, SEXP targetMask, SEXP affineComponents, SEXP verbose)
 {
     int i, j, levels = *(INTEGER(nLevels));
     SEXP returnValue, data, completedIterations;
@@ -95,8 +103,112 @@ SEXP reg_aladin (SEXP source, SEXP target, SEXP type, SEXP finalPrecision, SEXP 
         nifti_image_free(targetMaskImage);
     nifti_image_free(result.image);
     free(result.affine);
+    free(result.completedIterations);
     
     UNPROTECT(affineProvided ? 3 : 4);
+    
+    return returnValue;
+}
+
+extern "C"
+SEXP reg_f3d_R (SEXP source, SEXP target, SEXP finalPrecision, SEXP nLevels, SEXP maxIterations, SEXP nBins, SEXP bendingEnergyWeight, SEXP jacobianWeight, SEXP finalSpacing, SEXP finalInterpolation, SEXP targetMask, SEXP affineComponents, SEXP initControl, SEXP verbose)
+{
+    int i, j, levels = *(INTEGER(nLevels));
+    SEXP returnValue, data, controlPoints, completedIterations, xform;
+    
+    bool affineProvided = !isNull(affineComponents);
+    
+    nifti_image *sourceImage = s4_image_to_struct(source);
+    nifti_image *targetImage = s4_image_to_struct(target);
+    nifti_image *targetMaskImage = NULL;
+    nifti_image *controlPointImage = NULL;
+    mat44 *affineTransformation = NULL;
+    
+    if (!isNull(targetMask))
+        targetMaskImage = s4_image_to_struct(targetMask);
+    if (!isNull(initControl))
+        controlPointImage = s4_image_to_struct(initControl);
+    
+    if (affineProvided)
+    {
+        affineTransformation = (mat44 *) calloc(1, sizeof(mat44));
+        for (i = 0; i < 4; i++)
+        {
+            for (j = 0; j < 4; j++)
+                affineTransformation->m[i][j] = (float) REAL(affineComponents)[(j*4)+i];
+        }
+    }
+    
+    float spacing[3];
+    for (i = 0; i < 3; i++)
+        spacing[i] = (float) REAL(finalSpacing)[i];
+    
+    int precisionType = (strcmp(CHAR(STRING_ELT(finalPrecision,0)),"source")==0 ? INTERP_PREC_SOURCE : INTERP_PREC_DOUBLE);
+    
+    f3d_result result = do_reg_f3d(sourceImage, targetImage, precisionType, *(INTEGER(nLevels)), *(INTEGER(maxIterations)), *(INTEGER(finalInterpolation)), targetMaskImage, controlPointImage, affineTransformation, *(INTEGER(nBins)), spacing, (float) *(REAL(bendingEnergyWeight)), (float) *(REAL(jacobianWeight)), (*(INTEGER(verbose)) == 1));
+    
+    PROTECT(returnValue = NEW_LIST(4));
+    
+    if (result.image->datatype == DT_INT32)
+    {
+        // Integer-valued data went in, and precision must be "source"
+        PROTECT(data = NEW_INTEGER((R_len_t) result.image->nvox));
+        for (size_t i = 0; i < result.image->nvox; i++)
+            INTEGER(data)[i] = ((int *) result.image->data)[i];
+    }
+    else
+    {
+        // All other cases
+        PROTECT(data = NEW_NUMERIC((R_len_t) result.image->nvox));
+        for (size_t i = 0; i < result.image->nvox; i++)
+            REAL(data)[i] = ((double *) result.image->data)[i];
+    }
+    
+    SET_ELEMENT(returnValue, 0, data);
+    
+    PROTECT(controlPoints = NEW_NUMERIC((R_len_t) result.controlPoints->nvox));
+    for (size_t i = 0; i < result.controlPoints->nvox; i++)
+        REAL(controlPoints)[i] = ((double *) result.controlPoints->data)[i];
+    
+    SET_ELEMENT(returnValue, 1, controlPoints);
+    
+    PROTECT(completedIterations = NEW_INTEGER((R_len_t) levels));
+    for (i = 0; i < levels; i++)
+        INTEGER(completedIterations)[i] = result.completedIterations[i];
+    
+    SET_ELEMENT(returnValue, 2, completedIterations);
+    
+    PROTECT(xform = NEW_NUMERIC(21));
+    REAL(xform)[0] = (double) result.controlPoints->qform_code;
+    REAL(xform)[1] = (double) result.controlPoints->sform_code;
+    REAL(xform)[2] = (double) result.controlPoints->quatern_b;
+    REAL(xform)[3] = (double) result.controlPoints->quatern_c;
+    REAL(xform)[4] = (double) result.controlPoints->quatern_d;
+    REAL(xform)[5] = (double) result.controlPoints->qoffset_x;
+    REAL(xform)[6] = (double) result.controlPoints->qoffset_y;
+    REAL(xform)[7] = (double) result.controlPoints->qoffset_z;
+    REAL(xform)[8] = (double) result.controlPoints->qfac;
+    for (i = 0; i < 3; i++)
+    {
+        for (j = 0; j < 4; j++)
+            REAL(xform)[(i*4)+j+9] = (double) result.controlPoints->sto_xyz.m[i][j];
+    }
+    
+    SET_ELEMENT(returnValue, 3, xform);
+    
+    nifti_image_free(sourceImage);
+    nifti_image_free(targetImage);
+    if (targetMaskImage != NULL)
+        nifti_image_free(targetMaskImage);
+    if (controlPointImage != NULL)
+        nifti_image_free(controlPointImage);
+    nifti_image_free(result.image);
+    nifti_image_free(result.controlPoints);
+    free(result.completedIterations);
+    if (affineProvided || isNull(initControl))
+        free(affineTransformation);
+    
+    UNPROTECT(5);
     
     return returnValue;
 }
@@ -238,6 +350,43 @@ nifti_image * create_position_field (nifti_image *templateImage, bool twoDimRegi
     return positionFieldImage;
 }
 
+mat44 * create_init_affine (nifti_image *sourceImage, nifti_image *targetImage)
+{
+    mat44 *affineTransformation = (mat44 *) calloc(1, sizeof(mat44));
+    for (int i = 0; i < 4; i++)
+        affineTransformation->m[i][i] = 1.0;
+
+    mat44 *sourceMatrix, *targetMatrix;
+    float sourceCentre[3], targetCentre[3], sourceRealPosition[3], targetRealPosition[3];
+
+	if (sourceImage->sform_code>0)
+		sourceMatrix = &(sourceImage->sto_xyz);
+	else
+	    sourceMatrix = &(sourceImage->qto_xyz);
+	if (targetImage->sform_code>0)
+		targetMatrix = &(targetImage->sto_xyz);
+	else
+	    targetMatrix = &(targetImage->qto_xyz);
+
+	sourceCentre[0] = (float) (sourceImage->nx) / 2.0f;
+	sourceCentre[1] = (float) (sourceImage->ny) / 2.0f;
+	sourceCentre[2] = (float) (sourceImage->nz) / 2.0f;
+
+	targetCentre[0] = (float) (targetImage->nx) / 2.0f;
+	targetCentre[1] = (float) (targetImage->ny) / 2.0f;
+	targetCentre[2] = (float) (targetImage->nz) / 2.0f;
+
+	reg_mat44_mul(sourceMatrix, sourceCentre, sourceRealPosition);
+	reg_mat44_mul(targetMatrix, targetCentre, targetRealPosition);
+
+	// Use origins to initialise translation elements
+	affineTransformation->m[0][3] = sourceRealPosition[0] - targetRealPosition[0];
+	affineTransformation->m[1][3] = sourceRealPosition[1] - targetRealPosition[1];
+	affineTransformation->m[2][3] = sourceRealPosition[2] - targetRealPosition[2];
+	
+    return affineTransformation;
+}
+
 // Run the "aladin" registration algorithm
 aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage, int type, int finalPrecision, int nLevels, int maxIterations, int useBlockPercentage, int finalInterpolation, nifti_image *targetMaskImage, mat44 *affineTransformation, bool verbose)
 {
@@ -251,39 +400,7 @@ aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage,
     
     // Initial affine matrix is the identity
     if (affineTransformation == NULL)
-    {
-        affineTransformation = (mat44 *) calloc(1, sizeof(mat44));
-        for (i = 0; i < 4; i++)
-            affineTransformation->m[i][i] = 1.0;
-
-        mat44 *sourceMatrix, *targetMatrix;
-        float sourceCentre[3], targetCentre[3], sourceRealPosition[3], targetRealPosition[3];
-
-    	if (sourceImage->sform_code>0)
-    		sourceMatrix = &(sourceImage->sto_xyz);
-    	else
-    	    sourceMatrix = &(sourceImage->qto_xyz);
-    	if (targetImage->sform_code>0)
-    		targetMatrix = &(targetImage->sto_xyz);
-    	else
-    	    targetMatrix = &(targetImage->qto_xyz);
-
-    	sourceCentre[0] = (float) (sourceImage->nx) / 2.0f;
-    	sourceCentre[1] = (float) (sourceImage->ny) / 2.0f;
-    	sourceCentre[2] = (float) (sourceImage->nz) / 2.0f;
-
-    	targetCentre[0] = (float) (targetImage->nx) / 2.0f;
-    	targetCentre[1] = (float) (targetImage->ny) / 2.0f;
-    	targetCentre[2] = (float) (targetImage->nz) / 2.0f;
-
-    	reg_mat44_mul(sourceMatrix, sourceCentre, sourceRealPosition);
-    	reg_mat44_mul(targetMatrix, targetCentre, targetRealPosition);
-
-    	// Use origins to initialise translation elements
-    	affineTransformation->m[0][3] = sourceRealPosition[0] - targetRealPosition[0];
-    	affineTransformation->m[1][3] = sourceRealPosition[1] - targetRealPosition[1];
-    	affineTransformation->m[2][3] = sourceRealPosition[2] - targetRealPosition[2];
-    }
+        affineTransformation = create_init_affine(sourceImage, targetImage);
     
     // Binarise the mask image
     if (usingTargetMask)
@@ -379,7 +496,7 @@ aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage,
                 reg_affine_positionField(affineTransformation, targetImageCopy, positionFieldImage);
                 
                 // Resample the source image
-                reg_resampleSourceImage<PRECISION_TYPE>(targetImageCopy, sourceImageCopy, resultImage, positionFieldImage, targetMask, 1, sourceBGValue);
+                reg_resampleSourceImage(targetImageCopy, sourceImageCopy, resultImage, positionFieldImage, targetMask, 1, sourceBGValue);
                 
                 // Compute the correspondances between blocks - this is the expensive bit
                 block_matching_method<PRECISION_TYPE>(targetImageCopy, resultImage, &blockMatchingParams, targetMask);
@@ -433,7 +550,7 @@ aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage,
     resultImage->datatype = sourceImage->datatype;
     resultImage->nbyper = sourceImage->nbyper;
     resultImage->data = calloc(resultImage->nvox, resultImage->nbyper);
-    reg_resampleSourceImage<PRECISION_TYPE>(targetImage, sourceImage, resultImage, positionFieldImage, NULL, finalInterpolation, sourceBGValue);
+    reg_resampleSourceImage(targetImage, sourceImage, resultImage, positionFieldImage, NULL, finalInterpolation, sourceBGValue);
     
     nifti_image_free(positionFieldImage);
     
@@ -441,6 +558,145 @@ aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage,
     result.image = resultImage;
     result.affine = affineTransformation;
     result.completedIterations = completedIterations;
+    
+    return result;
+}
+
+f3d_result do_reg_f3d (nifti_image *sourceImage, nifti_image *targetImage, int finalPrecision, int nLevels, int maxIterations, int finalInterpolation, nifti_image *targetMaskImage, nifti_image *controlPointImage, mat44 *affineTransformation, int nBins, float *spacing, float bendingEnergyWeight, float jacobianWeight, bool verbose)
+{
+    if (controlPointImage == NULL && affineTransformation == NULL)
+        affineTransformation = create_init_affine(sourceImage, targetImage);
+    
+    // Binarise the mask image
+    if (targetMaskImage != NULL)
+        reg_tool_binarise_image(targetMaskImage);
+    
+    // The source data type is changed for precision if requested
+    if (finalPrecision == INTERP_PREC_DOUBLE)
+        reg_changeDatatype<double>(sourceImage);
+    
+    f3d_result result;
+    
+    if (nLevels == 0)
+    {
+        // Allocate and set completed iterations (nothing will be done so this is zero)
+        int *completedIterations = (int *) calloc(1, sizeof(int));
+        *completedIterations = 0;
+        
+        reg_checkAndCorrectDimension(controlPointImage);
+        
+        // Allocate a deformation field image
+        nifti_image *deformationFieldImage = create_position_field(targetImage, targetImage->nz <= 1);
+        
+        // Calculate deformation field from the control point image
+        if(controlPointImage->pixdim[5] > 1)
+            reg_getDeformationFieldFromVelocityGrid(controlPointImage, deformationFieldImage, NULL, false);
+        else
+            reg_spline_getDeformationField(controlPointImage, targetImage, deformationFieldImage, NULL, false, true);
+        
+        // Allocate result image
+        nifti_image *resultImage = nifti_copy_nim_info(targetImage);
+        resultImage->dim[0] = resultImage->ndim = sourceImage->dim[0];
+        resultImage->dim[4] = resultImage->nt = sourceImage->dim[4];
+        resultImage->cal_min = sourceImage->cal_min;
+        resultImage->cal_max = sourceImage->cal_max;
+        resultImage->scl_slope = sourceImage->scl_slope;
+        resultImage->scl_inter = sourceImage->scl_inter;
+        resultImage->datatype = sourceImage->datatype;
+        resultImage->nbyper = sourceImage->nbyper;
+        resultImage->nvox = resultImage->dim[1] * resultImage->dim[2] * resultImage->dim[3] * resultImage->dim[4];
+        resultImage->data = (void *) calloc(resultImage->nvox, resultImage->nbyper);
+        
+        // Resample source image to target space
+        reg_resampleSourceImage(targetImage, sourceImage, resultImage, deformationFieldImage, NULL, finalInterpolation, 0);
+        
+        // Free deformation field image
+        nifti_image_free(deformationFieldImage);
+        
+        result.image = resultImage;
+        result.controlPoints = copy_complete_nifti_image(controlPointImage);
+        result.completedIterations = completedIterations;
+    }
+    else
+    {
+        // Create the object encapsulating the registration
+        reg_f3d<PRECISION_TYPE> *reg = new reg_f3d<PRECISION_TYPE>(targetImage->nt, sourceImage->nt);
+        
+        // Create a vector to hold the number of completed iterations
+        int *completedIterations = (int *) calloc(nLevels, sizeof(int));
+
+#ifdef _OPENMP
+        int maxThreadNumber = omp_get_max_threads();
+        if (verbose)
+            Rprintf("[NiftyReg F3D] OpenMP is used with %i thread(s)\n", maxThreadNumber);
+#endif
+
+        // Set the reg_f3d parameters
+        reg->SetReferenceImage(targetImage);
+        reg->SetFloatingImage(sourceImage);
+
+        if (verbose)
+            reg->PrintOutInformation();
+        else
+            reg->DoNotPrintOutInformation();
+
+        if (targetMaskImage != NULL)
+           reg->SetReferenceMask(targetMaskImage);
+
+        if (controlPointImage != NULL)
+           reg->SetControlPointGridImage(controlPointImage);
+
+        if (affineTransformation != NULL)
+           reg->SetAffineTransformation(affineTransformation);
+
+        reg->SetBendingEnergyWeight(bendingEnergyWeight);
+
+        // if (linearEnergyWeight0==linearEnergyWeight0 || linearEnergyWeight1==linearEnergyWeight1 || linearEnergyWeight2==linearEnergyWeight2)
+        // {
+        //     if(linearEnergyWeight0!=linearEnergyWeight0) linearEnergyWeight0=0.0;
+        //     if(linearEnergyWeight1!=linearEnergyWeight1) linearEnergyWeight1=0.0;
+        //     if(linearEnergyWeight2!=linearEnergyWeight2) linearEnergyWeight2=0.0;
+        //     reg->SetLinearEnergyWeights(linearEnergyWeight0,linearEnergyWeight1,linearEnergyWeight2);
+        // }
+    
+        reg->SetJacobianLogWeight(jacobianWeight);
+
+        reg->SetMaximalIterationNumber(maxIterations);
+
+        if (nBins > 0)
+        {
+            for (int i = 0; i < targetImage->nt; i++)
+            {
+                reg->SetReferenceBinNumber(i, (unsigned) nBins);
+                reg->SetFloatingBinNumber(i, (unsigned) nBins);
+            }
+        }
+
+        for (int i = 0; i < 3; i++)
+            reg->SetSpacing((unsigned) i, (PRECISION_TYPE) spacing[i]);
+
+        reg->SetLevelNumber(nLevels);
+        reg->SetLevelToPerform(nLevels);
+
+        if (finalInterpolation == 3)
+            reg->UseCubicSplineInterpolation();
+        else if (finalInterpolation == 1)
+            reg->UseLinearInterpolation();
+        else
+            reg->UseNeareatNeighborInterpolation();
+    
+        // Run the registration
+        reg->Run_f3d();
+    
+        memcpy(completedIterations, reg->GetCompletedIterations(), nLevels*sizeof(int));
+
+        result.image = reg->GetWarpedImage();
+        result.controlPoints = reg->GetControlPointPositionImage();
+        result.completedIterations = completedIterations;
+    
+        // Erase the registration object
+        delete reg;
+    }
     
     return result;
 }
