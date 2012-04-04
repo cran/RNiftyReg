@@ -52,8 +52,8 @@ niftyreg.linear <- function (source, target, targetMask = NULL, initAffine = NUL
         report(OL$Error, "Only 2D, 3D or 4D source images may be used")
     if (!(target@dim_[1] %in% c(2,3)))
         report(OL$Error, "Only 2D or 3D target images may be used")
-    if (length(dim(source)) - length(dim(target)) > 1)
-        report(OL$Error, "The source image may not have more than one extra dimension")
+    if (source@dim_[1] == 4 && target@dim_[1] == 2)
+        report(OL$Error, "4D to 2D registration cannot be performed")
     if (any(dim(source) < 4) || any(dim(target) < 4))
         report(OL$Error, "Images of fewer than 4 voxels in any dimension cannot be registered")
     if (!is.null(targetMask) && !is.nifti(targetMask))
@@ -159,8 +159,8 @@ niftyreg.nonlinear <- function (source, target, targetMask = NULL, initAffine = 
         report(OL$Error, "Only 2D, 3D or 4D source images may be used")
     if (!(target@dim_[1] %in% c(2,3)))
         report(OL$Error, "Only 2D or 3D target images may be used")
-    if (length(dim(source)) - length(dim(target)) > 1)
-        report(OL$Error, "The source image may not have more than one extra dimension")
+    if (source@dim_[1] == 4 && target@dim_[1] == 2)
+        report(OL$Error, "4D to 2D registration cannot be performed")
     if (!is.null(targetMask) && !is.nifti(targetMask))
         report(OL$Error, "Target mask must be NULL or a \"nifti\" object")
     if (any(sapply(list(nLevels,maxIterations,nBins,bendingEnergyWeight,jacobianWeight,finalInterpolation,verbose), length) != 1))
@@ -169,8 +169,6 @@ niftyreg.nonlinear <- function (source, target, targetMask = NULL, initAffine = 
         report(OL$Error, "Penalty term weights must be nonnegative")
     if (bendingEnergyWeight + jacobianWeight > 1)
         report(OL$Error, "Penalty term weights cannot add up to more than 1")
-    if (length(finalSpacing) != 3)
-        report(OL$Error, "Final spacing must be specified as a numeric 3-vector")
     if (!(finalInterpolation %in% c(0,1,3)))
         report(OL$Error, "Final interpolation specifier must be 0, 1 or 3")
     
@@ -182,6 +180,8 @@ niftyreg.nonlinear <- function (source, target, targetMask = NULL, initAffine = 
         if (!is.nifti(initControl[[1]]))
             report(OL$Error, "Initial control point images must be specified as \"nifti\" objects")
         initControl <- lapply(initControl, .fixTypes)
+        finalSpacing <- initControl[[1]]@pixdim[2:4]
+        spacingUnit <- "mm"
         initAffine <- NULL
     }
     
@@ -199,8 +199,20 @@ niftyreg.nonlinear <- function (source, target, targetMask = NULL, initAffine = 
     
     spacingUnit <- match.arg(spacingUnit)
     if (spacingUnit == "vox")
-        finalSpacing <- finalSpacing * target@pixdim[2:4]
-    controlPointDims <- floor(abs(target@dim_[2:4] * target@pixdim[2:4] / finalSpacing)) + 5
+        finalSpacing <- finalSpacing * abs(target@pixdim[2:4])
+    
+    if (target@dim_[1] == 2)
+    {
+        finalSpacing <- c(finalSpacing[1:2], 1)
+        controlPointDims <- floor(abs(target@dim_[2:3] * target@pixdim[2:3] / finalSpacing[1:2])) + 5
+        controlPointDims <- c(controlPointDims, 1, 1, 2)
+    }
+    else
+    {
+        finalSpacing <- finalSpacing[1:3]
+        controlPointDims <- floor(abs(target@dim_[2:4] * target@pixdim[2:4] / finalSpacing)) + 5
+        controlPointDims <- c(controlPointDims, 1, 3)
+    }
     
     if (!is.null(interpolationPrecision))
         interpolationPrecision <- match.arg(interpolationPrecision, c("source","single","double"))
@@ -214,12 +226,12 @@ niftyreg.nonlinear <- function (source, target, targetMask = NULL, initAffine = 
         returnValue <- .Call("reg_f3d_R", .fixTypes(source), .fixTypes(target), interpolationPrecision, as.integer(nLevels), as.integer(maxIterations), as.integer(nBins), as.numeric(bendingEnergyWeight), as.numeric(jacobianWeight), as.numeric(abs(finalSpacing)), as.integer(finalInterpolation), .fixTypes(targetMask), initAffine[[1]], initControl[[1]], as.integer(verbose), PACKAGE="RNiftyReg")
         
         dim(returnValue[[1]]) <- dim(target)
-        dim(returnValue[[2]]) <- c(controlPointDims,1,3)
+        dim(returnValue[[2]]) <- controlPointDims
         
         xform <- returnValue[[4]]
 
         resultImage <- as.nifti(returnValue[[1]], target)
-        control <- list(new("nifti", .Data=returnValue[[2]], dim_=c(5,controlPointDims,1,3,1,1), datatype=64L, bitpix=64, pixdim=c(xform[9],finalSpacing,1,1,0,0), xyzt_units=0, qform_code=xform[1], sform_code=xform[2], quatern_b=xform[3], quatern_c=xform[4], quatern_d=xform[5], qoffset_x=xform[6], qoffset_y=xform[7], qoffset_z=xform[8], srow_x=xform[10:13], srow_y=xform[14:17], srow_z=xform[18:21], cal_min=min(returnValue[[2]]), cal_max=max(returnValue[[2]])))
+        control <- list(new("nifti", .Data=returnValue[[2]], dim_=c(5,controlPointDims,1,1), datatype=64L, bitpix=64, pixdim=c(xform[9],finalSpacing,1,1,0,0), xyzt_units=0, qform_code=xform[1], sform_code=xform[2], quatern_b=xform[3], quatern_c=xform[4], quatern_d=xform[5], qoffset_x=xform[6], qoffset_y=xform[7], qoffset_z=xform[8], srow_x=xform[10:13], srow_y=xform[14:17], srow_z=xform[18:21], cal_min=min(returnValue[[2]]), cal_max=max(returnValue[[2]])))
         iterations <- list(returnValue[[3]])
     }
     else
@@ -253,11 +265,11 @@ niftyreg.nonlinear <- function (source, target, targetMask = NULL, initAffine = 
                 finalArray[,,,i] <- returnValue[[1]]
             }
             
-            dim(returnValue[[2]]) <- c(controlPointDims,1,3)
+            dim(returnValue[[2]]) <- controlPointDims
 
             xform <- returnValue[[4]]
 
-            control[[i]] <- new("nifti", .Data=returnValue[[2]], dim_=c(5,controlPointDims,1,3,1,1), datatype=64L, bitpix=64, pixdim=c(xform[9],finalSpacing,1,1,0,0), xyzt_units=0, qform_code=xform[1], sform_code=xform[2], quatern_b=xform[3], quatern_c=xform[4], quatern_d=xform[5], qoffset_x=xform[6], qoffset_y=xform[7], qoffset_z=xform[8], srow_x=xform[10:13], srow_y=xform[14:17], srow_z=xform[18:21], cal_min=min(returnValue[[2]]), cal_max=max(returnValue[[2]]))
+            control[[i]] <- new("nifti", .Data=returnValue[[2]], dim_=c(5,controlPointDims,1,1), datatype=64L, bitpix=64, pixdim=c(xform[9],finalSpacing,1,1,0,0), xyzt_units=0, qform_code=xform[1], sform_code=xform[2], quatern_b=xform[3], quatern_c=xform[4], quatern_d=xform[5], qoffset_x=xform[6], qoffset_y=xform[7], qoffset_z=xform[8], srow_x=xform[10:13], srow_y=xform[14:17], srow_z=xform[18:21], cal_min=min(returnValue[[2]]), cal_max=max(returnValue[[2]]))
             iterations[[i]] <- returnValue[[3]]
         }
         
