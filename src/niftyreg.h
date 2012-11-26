@@ -8,29 +8,36 @@ typedef struct {
 } aladin_result;
 
 typedef struct {
-    nifti_image *image;
-    nifti_image *controlPoints;
+    mat44 *initAffine;
+    nifti_image *forwardImage;
+    nifti_image *forwardControlPoints;
+    nifti_image *reverseImage;
+    nifti_image *reverseControlPoints;
     int *completedIterations;
 } f3d_result;
 
 extern "C"
-SEXP reg_aladin_R (SEXP source, SEXP target, SEXP type, SEXP finalPrecision, SEXP nLevels, SEXP maxIterations, SEXP useBlockPercentage, SEXP finalInterpolation, SEXP targetMask, SEXP affineComponents, SEXP verbose);
+SEXP reg_aladin_R (SEXP source, SEXP target, SEXP type, SEXP nLevels, SEXP maxIterations, SEXP useBlockPercentage, SEXP finalInterpolation, SEXP targetMask, SEXP affineComponents, SEXP verbose);
 
 extern "C"
-SEXP reg_f3d_R (SEXP source, SEXP target, SEXP finalPrecision, SEXP nLevels, SEXP maxIterations, SEXP nBins, SEXP bendingEnergyWeight, SEXP jacobianWeight, SEXP finalSpacing, SEXP finalInterpolation, SEXP targetMask, SEXP affineComponents, SEXP initControl, SEXP verbose);
+SEXP reg_f3d_R (SEXP source, SEXP target, SEXP nLevels, SEXP maxIterations, SEXP nBins, SEXP bendingEnergyWeight, SEXP jacobianWeight, SEXP inverseConsistencyWeight, SEXP finalSpacing, SEXP finalInterpolation, SEXP targetMask, SEXP sourceMask, SEXP affineComponents, SEXP initControl, SEXP symmetric, SEXP verbose);
+
+void convert_and_insert_image (nifti_image *image, SEXP list, int index);
+
+void convert_and_insert_xform (nifti_image *image, SEXP list, int index);
+
+void convert_and_insert_affine (mat44 *affine, SEXP list, int index);
 
 nifti_image * s4_image_to_struct (SEXP object);
 
-bool reg_test_convergence (mat44 *updateMatrix);
-
 nifti_image * copy_complete_nifti_image (nifti_image *source);
-
-nifti_image * create_position_field (nifti_image *templateImage, bool twoDimRegistration);
 
 mat44 * create_init_affine (nifti_image *sourceImage, nifti_image *targetImage);
 
-aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage, int type, int finalPrecision, int nLevels, int maxIterations, int useBlockPercentage, int finalInterpolation, nifti_image *targetMaskImage, mat44 *affineTransformation, bool verbose);
+nifti_image * resample_image (nifti_image *sourceImage, nifti_image *targetImage, nifti_image *controlPointImage, mat44 *affineTransformation, int finalInterpolation);
 
-f3d_result do_reg_f3d (nifti_image *sourceImage, nifti_image *targetImage, int finalPrecision, int nLevels, int maxIterations, int finalInterpolation, nifti_image *targetMaskImage, nifti_image *controlPointImage, mat44 *affineTransformation, int nBins, float *spacing, float bendingEnergyWeight, float jacobianWeight, bool verbose);
+aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage, int type, int nLevels, int maxIterations, int useBlockPercentage, int finalInterpolation, nifti_image *targetMaskImage, mat44 *affineTransformation, bool verbose);
+
+f3d_result do_reg_f3d (nifti_image *sourceImage, nifti_image *targetImage, int nLevels, int maxIterations, int finalInterpolation, nifti_image *sourceMaskImage, nifti_image *targetMaskImage, nifti_image *controlPointImage, mat44 *affineTransformation, int nBins, float *spacing, float bendingEnergyWeight, float jacobianWeight, float inverseConsistencyWeight, bool symmetric, bool verbose);
 
 #endif

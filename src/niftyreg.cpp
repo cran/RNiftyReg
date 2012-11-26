@@ -1,28 +1,15 @@
-// Registration types (degrees of freedom) - these constants have to have these values
-#define RIGID 0
-#define AFFINE 1
+// Registration types (degrees of freedom)
+#define TYPE_RIGID 0
+#define TYPE_AFFINE 1
 
-// Precision levels for final interpolation
-#define INTERP_PREC_SOURCE 0
-#define INTERP_PREC_DOUBLE 1
-
-// Working precision for the source and target images: float and double are valid for the NiftyReg code
+// Working precision: float and double are valid for the NiftyReg code
 #define PRECISION_TYPE double
 
-// Convergence criterion
-#define CONVERGENCE_EPS 0.00001
-
-#define JH_TRI 0
-#define JH_PARZEN_WIN 1
-#define JH_PW_APPROX 2
-
-#define FOLDING_CORRECTION_STEP 20
-
 #include "_reg_resampling.h"
-#include "_reg_globalTransformation.h"
-#include "_reg_blockMatching.h"
 #include "_reg_tools.h"
+#include "_reg_aladin.h"
 #include "_reg_f3d.h"
+#include "_reg_f3d_sym.h"
 
 #include <R.h>
 #include <Rdefines.h>
@@ -32,10 +19,10 @@
 #include "substitutions.h"
 
 extern "C"
-SEXP reg_aladin_R (SEXP source, SEXP target, SEXP type, SEXP finalPrecision, SEXP nLevels, SEXP maxIterations, SEXP useBlockPercentage, SEXP finalInterpolation, SEXP targetMask, SEXP affineComponents, SEXP verbose)
+SEXP reg_aladin_R (SEXP source, SEXP target, SEXP type, SEXP nLevels, SEXP maxIterations, SEXP useBlockPercentage, SEXP finalInterpolation, SEXP targetMask, SEXP affineComponents, SEXP verbose)
 {
     int i, j, levels = *(INTEGER(nLevels));
-    SEXP returnValue, data, completedIterations;
+    SEXP returnValue, completedIterations;
     
     bool affineProvided = !isNull(affineComponents);
     
@@ -57,45 +44,26 @@ SEXP reg_aladin_R (SEXP source, SEXP target, SEXP type, SEXP finalPrecision, SEX
         }
     }
     
-    int regType = (strcmp(CHAR(STRING_ELT(type,0)),"rigid")==0 ? RIGID : AFFINE);
-    int precisionType = (strcmp(CHAR(STRING_ELT(finalPrecision,0)),"source")==0 ? INTERP_PREC_SOURCE : INTERP_PREC_DOUBLE);
+    int regType = (strcmp(CHAR(STRING_ELT(type,0)),"rigid")==0 ? TYPE_RIGID : TYPE_AFFINE);
     
-    aladin_result result = do_reg_aladin(sourceImage, targetImage, regType, precisionType, *(INTEGER(nLevels)), *(INTEGER(maxIterations)), *(INTEGER(useBlockPercentage)), *(INTEGER(finalInterpolation)), targetMaskImage, affineTransformation, (*(INTEGER(verbose)) == 1));
+    aladin_result result = do_reg_aladin(sourceImage, targetImage, regType, *(INTEGER(nLevels)), *(INTEGER(maxIterations)), *(INTEGER(useBlockPercentage)), *(INTEGER(finalInterpolation)), targetMaskImage, affineTransformation, (*(INTEGER(verbose)) == 1));
     
     PROTECT(returnValue = NEW_LIST(3));
     
-    if (result.image->datatype == DT_INT32)
+    convert_and_insert_image(result.image, returnValue, 0);
+    convert_and_insert_affine(result.affine, returnValue, 1);
+    
+    if (result.completedIterations != NULL)
     {
-        // Integer-valued data went in, and precision must be "source"
-        PROTECT(data = NEW_INTEGER((R_len_t) result.image->nvox));
-        for (size_t i = 0; i < result.image->nvox; i++)
-            INTEGER(data)[i] = ((int *) result.image->data)[i];
+        PROTECT(completedIterations = NEW_INTEGER((R_len_t) levels));
+        for (i = 0; i < levels; i++)
+            INTEGER(completedIterations)[i] = result.completedIterations[i];
+    
+        SET_ELEMENT(returnValue, 2, completedIterations);
+        UNPROTECT(1);
     }
     else
-    {
-        // All other cases
-        PROTECT(data = NEW_NUMERIC((R_len_t) result.image->nvox));
-        for (size_t i = 0; i < result.image->nvox; i++)
-            REAL(data)[i] = ((double *) result.image->data)[i];
-    }
-    
-    SET_ELEMENT(returnValue, 0, data);
-    
-    if (!affineProvided)
-        PROTECT(affineComponents = NEW_NUMERIC(16));
-    for (i = 0; i < 4; i++)
-    {
-        for (j = 0; j < 4; j++)
-            REAL(affineComponents)[(j*4)+i] = (double) result.affine->m[i][j];
-    }
-    
-    SET_ELEMENT(returnValue, 1, affineComponents);
-    
-    PROTECT(completedIterations = NEW_INTEGER(levels));
-    for (i = 0; i < levels; i++)
-        INTEGER(completedIterations)[i] = result.completedIterations[i];
-    
-    SET_ELEMENT(returnValue, 2, completedIterations);
+        SET_ELEMENT(returnValue, 2, R_NilValue);
     
     nifti_image_free(sourceImage);
     nifti_image_free(targetImage);
@@ -103,27 +71,32 @@ SEXP reg_aladin_R (SEXP source, SEXP target, SEXP type, SEXP finalPrecision, SEX
         nifti_image_free(targetMaskImage);
     nifti_image_free(result.image);
     free(result.affine);
-    free(result.completedIterations);
+    if (result.completedIterations != NULL)
+        free(result.completedIterations);
     
-    UNPROTECT(affineProvided ? 3 : 4);
+    UNPROTECT(1);
     
     return returnValue;
 }
 
 extern "C"
-SEXP reg_f3d_R (SEXP source, SEXP target, SEXP finalPrecision, SEXP nLevels, SEXP maxIterations, SEXP nBins, SEXP bendingEnergyWeight, SEXP jacobianWeight, SEXP finalSpacing, SEXP finalInterpolation, SEXP targetMask, SEXP affineComponents, SEXP initControl, SEXP verbose)
+SEXP reg_f3d_R (SEXP source, SEXP target, SEXP nLevels, SEXP maxIterations, SEXP nBins, SEXP bendingEnergyWeight, SEXP jacobianWeight, SEXP inverseConsistencyWeight, SEXP finalSpacing, SEXP finalInterpolation, SEXP targetMask, SEXP sourceMask, SEXP affineComponents, SEXP initControl, SEXP symmetric, SEXP verbose)
 {
     int i, j, levels = *(INTEGER(nLevels));
-    SEXP returnValue, data, controlPoints, completedIterations, xform;
+    SEXP returnValue, completedIterations;
     
     bool affineProvided = !isNull(affineComponents);
+    bool useSymmetricAlgorithm = (*(INTEGER(symmetric)) == 1);
     
     nifti_image *sourceImage = s4_image_to_struct(source);
     nifti_image *targetImage = s4_image_to_struct(target);
+    nifti_image *sourceMaskImage = NULL;
     nifti_image *targetMaskImage = NULL;
     nifti_image *controlPointImage = NULL;
     mat44 *affineTransformation = NULL;
     
+    if (!isNull(sourceMask) && useSymmetricAlgorithm)
+        sourceMaskImage = s4_image_to_struct(sourceMask);
     if (!isNull(targetMask))
         targetMaskImage = s4_image_to_struct(targetMask);
     if (!isNull(initControl))
@@ -142,59 +115,37 @@ SEXP reg_f3d_R (SEXP source, SEXP target, SEXP finalPrecision, SEXP nLevels, SEX
     float spacing[3];
     for (i = 0; i < 3; i++)
         spacing[i] = (float) REAL(finalSpacing)[i];
+        
+    f3d_result result = do_reg_f3d(sourceImage, targetImage, *(INTEGER(nLevels)), *(INTEGER(maxIterations)), *(INTEGER(finalInterpolation)), sourceMaskImage, targetMaskImage, controlPointImage, affineTransformation, *(INTEGER(nBins)), spacing, (float) *(REAL(bendingEnergyWeight)), (float) *(REAL(jacobianWeight)), (float) *(REAL(inverseConsistencyWeight)), useSymmetricAlgorithm, (*(INTEGER(verbose)) == 1));
     
-    int precisionType = (strcmp(CHAR(STRING_ELT(finalPrecision,0)),"source")==0 ? INTERP_PREC_SOURCE : INTERP_PREC_DOUBLE);
+    if (useSymmetricAlgorithm)
+        PROTECT(returnValue = NEW_LIST(8));
+    else
+        PROTECT(returnValue = NEW_LIST(4));
     
-    f3d_result result = do_reg_f3d(sourceImage, targetImage, precisionType, *(INTEGER(nLevels)), *(INTEGER(maxIterations)), *(INTEGER(finalInterpolation)), targetMaskImage, controlPointImage, affineTransformation, *(INTEGER(nBins)), spacing, (float) *(REAL(bendingEnergyWeight)), (float) *(REAL(jacobianWeight)), (*(INTEGER(verbose)) == 1));
+    convert_and_insert_image(result.forwardImage, returnValue, 0);
+    convert_and_insert_image(result.forwardControlPoints, returnValue, 1);
+    convert_and_insert_xform(result.forwardControlPoints, returnValue, 2);
     
-    PROTECT(returnValue = NEW_LIST(4));
-    
-    if (result.image->datatype == DT_INT32)
+    if (result.completedIterations != NULL)
     {
-        // Integer-valued data went in, and precision must be "source"
-        PROTECT(data = NEW_INTEGER((R_len_t) result.image->nvox));
-        for (size_t i = 0; i < result.image->nvox; i++)
-            INTEGER(data)[i] = ((int *) result.image->data)[i];
+        PROTECT(completedIterations = NEW_INTEGER((R_len_t) levels));
+        for (i = 0; i < levels; i++)
+            INTEGER(completedIterations)[i] = result.completedIterations[i];
+    
+        SET_ELEMENT(returnValue, 3, completedIterations);
+        UNPROTECT(1);
     }
     else
+        SET_ELEMENT(returnValue, 3, R_NilValue);
+    
+    if (useSymmetricAlgorithm)
     {
-        // All other cases
-        PROTECT(data = NEW_NUMERIC((R_len_t) result.image->nvox));
-        for (size_t i = 0; i < result.image->nvox; i++)
-            REAL(data)[i] = ((double *) result.image->data)[i];
+        convert_and_insert_image(result.reverseImage, returnValue, 4);
+        convert_and_insert_image(result.reverseControlPoints, returnValue, 5);
+        convert_and_insert_xform(result.reverseControlPoints, returnValue, 6);
+        convert_and_insert_affine(result.initAffine, returnValue, 7);
     }
-    
-    SET_ELEMENT(returnValue, 0, data);
-    
-    PROTECT(controlPoints = NEW_NUMERIC((R_len_t) result.controlPoints->nvox));
-    for (size_t i = 0; i < result.controlPoints->nvox; i++)
-        REAL(controlPoints)[i] = ((double *) result.controlPoints->data)[i];
-    
-    SET_ELEMENT(returnValue, 1, controlPoints);
-    
-    PROTECT(completedIterations = NEW_INTEGER((R_len_t) levels));
-    for (i = 0; i < levels; i++)
-        INTEGER(completedIterations)[i] = result.completedIterations[i];
-    
-    SET_ELEMENT(returnValue, 2, completedIterations);
-    
-    PROTECT(xform = NEW_NUMERIC(21));
-    REAL(xform)[0] = (double) result.controlPoints->qform_code;
-    REAL(xform)[1] = (double) result.controlPoints->sform_code;
-    REAL(xform)[2] = (double) result.controlPoints->quatern_b;
-    REAL(xform)[3] = (double) result.controlPoints->quatern_c;
-    REAL(xform)[4] = (double) result.controlPoints->quatern_d;
-    REAL(xform)[5] = (double) result.controlPoints->qoffset_x;
-    REAL(xform)[6] = (double) result.controlPoints->qoffset_y;
-    REAL(xform)[7] = (double) result.controlPoints->qoffset_z;
-    REAL(xform)[8] = (double) result.controlPoints->qfac;
-    for (i = 0; i < 3; i++)
-    {
-        for (j = 0; j < 4; j++)
-            REAL(xform)[(i*4)+j+9] = (double) result.controlPoints->sto_xyz.m[i][j];
-    }
-    
-    SET_ELEMENT(returnValue, 3, xform);
     
     nifti_image_free(sourceImage);
     nifti_image_free(targetImage);
@@ -202,15 +153,78 @@ SEXP reg_f3d_R (SEXP source, SEXP target, SEXP finalPrecision, SEXP nLevels, SEX
         nifti_image_free(targetMaskImage);
     if (controlPointImage != NULL)
         nifti_image_free(controlPointImage);
-    nifti_image_free(result.image);
-    nifti_image_free(result.controlPoints);
-    free(result.completedIterations);
+    nifti_image_free(result.forwardImage);
+    nifti_image_free(result.forwardControlPoints);
+    if (result.completedIterations != NULL)
+        free(result.completedIterations);
     if (affineProvided || isNull(initControl))
         free(affineTransformation);
     
-    UNPROTECT(5);
+    UNPROTECT(1);
     
     return returnValue;
+}
+
+void convert_and_insert_image (nifti_image *image, SEXP list, int index)
+{
+    SEXP data;
+    
+    if (image->datatype == DT_INT32)
+    {
+        PROTECT(data = NEW_INTEGER((R_len_t) image->nvox));
+        for (size_t i = 0; i < image->nvox; i++)
+            INTEGER(data)[i] = ((int *) image->data)[i];
+    }
+    else
+    {
+        PROTECT(data = NEW_NUMERIC((R_len_t) image->nvox));
+        for (size_t i = 0; i < image->nvox; i++)
+            REAL(data)[i] = ((double *) image->data)[i];
+    }
+    
+    SET_ELEMENT(list, index, data);
+    UNPROTECT(1);
+}
+
+void convert_and_insert_xform (nifti_image *image, SEXP list, int index)
+{
+    int i, j;
+    SEXP xform;
+    
+    PROTECT(xform = NEW_NUMERIC(21));
+    REAL(xform)[0] = (double) image->qform_code;
+    REAL(xform)[1] = (double) image->sform_code;
+    REAL(xform)[2] = (double) image->quatern_b;
+    REAL(xform)[3] = (double) image->quatern_c;
+    REAL(xform)[4] = (double) image->quatern_d;
+    REAL(xform)[5] = (double) image->qoffset_x;
+    REAL(xform)[6] = (double) image->qoffset_y;
+    REAL(xform)[7] = (double) image->qoffset_z;
+    REAL(xform)[8] = (double) image->qfac;
+    for (i = 0; i < 3; i++)
+    {
+        for (j = 0; j < 4; j++)
+            REAL(xform)[(i*4)+j+9] = (double) image->sto_xyz.m[i][j];
+    }
+    
+    SET_ELEMENT(list, index, xform);
+    UNPROTECT(1);
+}
+
+void convert_and_insert_affine (mat44 *affine, SEXP list, int index)
+{
+    int i, j;
+    SEXP elements;
+    
+    PROTECT(elements = NEW_NUMERIC(16));
+    for (i = 0; i < 4; i++)
+    {
+        for (j = 0; j < 4; j++)
+            REAL(elements)[(j*4)+i] = (double) affine->m[i][j];
+    }
+    
+    SET_ELEMENT(list, index, elements);
+    UNPROTECT(1);
 }
 
 // Convert an S4 "nifti" object, as defined in the oro.nifti package, to a "nifti_image" struct
@@ -295,27 +309,6 @@ nifti_image * s4_image_to_struct (SEXP object)
     return image;
 }
 
-// Does the specified update matrix represent convergence?
-bool reg_test_convergence (mat44 *updateMatrix)
-{
-    bool convergence = true;
-    float referenceValue;
-    
-    // The fourth row is always [0 0 0 1] so we don't test it
-    for (int i = 0; i < 3; i++)
-    {
-        for (int j = 0; j < 4; j++)
-        {
-            // The diagonal represents scale factors, so 1 indicates no change
-            referenceValue = (i==j ? 1.0f : 0.0f);
-            if ((fabsf(updateMatrix->m[i][j]) - referenceValue) > CONVERGENCE_EPS)
-                convergence = false;
-        }
-    }
-
-    return convergence;
-}
-
 nifti_image * copy_complete_nifti_image (nifti_image *source)
 {
     size_t dataSize = nifti_get_volsize(source);
@@ -324,30 +317,6 @@ nifti_image * copy_complete_nifti_image (nifti_image *source)
     memcpy(destination->data, source->data, dataSize);
     
     return destination;
-}
-
-nifti_image * create_position_field (nifti_image *templateImage, bool twoDimRegistration)
-{
-    nifti_image *positionFieldImage = nifti_copy_nim_info(templateImage);
-    
-    positionFieldImage->dim[0] = positionFieldImage->ndim = 5;
-    positionFieldImage->dim[1] = positionFieldImage->nx = templateImage->nx;
-    positionFieldImage->dim[2] = positionFieldImage->ny = templateImage->ny;
-    positionFieldImage->dim[3] = positionFieldImage->nz = templateImage->nz;
-    positionFieldImage->dim[4] = positionFieldImage->nt = 1;
-    positionFieldImage->pixdim[4] = positionFieldImage->dt = 1.0;
-    positionFieldImage->dim[5] = positionFieldImage->nu = (twoDimRegistration ? 2 : 3);
-    positionFieldImage->pixdim[5] = positionFieldImage->du = 1.0;
-    positionFieldImage->dim[6] = positionFieldImage->nv = 1;
-    positionFieldImage->pixdim[6] = positionFieldImage->dv = 1.0;
-    positionFieldImage->dim[7] = positionFieldImage->nw = 1;
-    positionFieldImage->pixdim[7] = positionFieldImage->dw = 1.0;
-    positionFieldImage->nvox = positionFieldImage->nx * positionFieldImage->ny * positionFieldImage->nz * positionFieldImage->nt * positionFieldImage->nu;
-    positionFieldImage->datatype = (sizeof(PRECISION_TYPE)==4 ? NIFTI_TYPE_FLOAT32 : NIFTI_TYPE_FLOAT64);
-    positionFieldImage->nbyper = sizeof(PRECISION_TYPE);
-    positionFieldImage->data = calloc(positionFieldImage->nvox, positionFieldImage->nbyper);
-    
-    return positionFieldImage;
 }
 
 mat44 * create_init_affine (nifti_image *sourceImage, nifti_image *targetImage)
@@ -387,294 +356,227 @@ mat44 * create_init_affine (nifti_image *sourceImage, nifti_image *targetImage)
     return affineTransformation;
 }
 
-// Run the "aladin" registration algorithm
-aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage, int type, int finalPrecision, int nLevels, int maxIterations, int useBlockPercentage, int finalInterpolation, nifti_image *targetMaskImage, mat44 *affineTransformation, bool verbose)
+nifti_image * resample_image (nifti_image *sourceImage, nifti_image *targetImage, nifti_image *controlPointImage, mat44 *affineTransformation, int finalInterpolation)
 {
-    int i;
-    bool usingTargetMask = (targetMaskImage != NULL);
-    bool twoDimRegistration = (sourceImage->nz == 1 || targetImage->nz == 1);
-    float sourceBGValue = 0.0;
-    nifti_image *resultImage, *positionFieldImage = NULL;
+    // Allocate a deformation field image
+    nifti_image *deformationFieldImage = nifti_copy_nim_info(targetImage);
     
-    int *completedIterations = (int *) calloc(nLevels, sizeof(int));
+    // Set up properties of deformation field
+    deformationFieldImage->dim[0] = deformationFieldImage->ndim = 5;
+    deformationFieldImage->dim[1] = deformationFieldImage->nx = targetImage->nx;
+    deformationFieldImage->dim[2] = deformationFieldImage->ny = targetImage->ny;
+    deformationFieldImage->dim[3] = deformationFieldImage->nz = targetImage->nz;
+    deformationFieldImage->dim[4] = deformationFieldImage->nt = 1;
+    deformationFieldImage->pixdim[4] = deformationFieldImage->dt = 1.0;
+    deformationFieldImage->dim[5] = deformationFieldImage->nu = (targetImage->nz <= 1 ? 2 : 3);
+    deformationFieldImage->pixdim[5] = deformationFieldImage->du = 1.0;
+    deformationFieldImage->dim[6] = deformationFieldImage->nv = 1;
+    deformationFieldImage->pixdim[6] = deformationFieldImage->dv = 1.0;
+    deformationFieldImage->dim[7] = deformationFieldImage->nw = 1;
+    deformationFieldImage->pixdim[7] = deformationFieldImage->dw = 1.0;
+    deformationFieldImage->nvox = deformationFieldImage->nx * deformationFieldImage->ny * deformationFieldImage->nz * deformationFieldImage->nt * deformationFieldImage->nu;
+    deformationFieldImage->datatype = (sizeof(PRECISION_TYPE)==4 ? NIFTI_TYPE_FLOAT32 : NIFTI_TYPE_FLOAT64);
+    deformationFieldImage->nbyper = sizeof(PRECISION_TYPE);
+    deformationFieldImage->data = calloc(deformationFieldImage->nvox, deformationFieldImage->nbyper);
     
-    // Initial affine matrix is the identity
-    if (affineTransformation == NULL)
-        affineTransformation = create_init_affine(sourceImage, targetImage);
-    
-    // Binarise the mask image
-    if (usingTargetMask)
-        reg_tool_binarise_image(targetMaskImage);
-    
-    for (int level = 0; level < nLevels; level++)
+    if (controlPointImage != NULL)
     {
-        nifti_image *sourceImageCopy = copy_complete_nifti_image(sourceImage);
-        nifti_image *targetImageCopy = copy_complete_nifti_image(targetImage);
-        nifti_image *targetMaskImageCopy = NULL;
-        if (usingTargetMask)
-            targetMaskImageCopy = copy_complete_nifti_image(targetMaskImage);
+        reg_checkAndCorrectDimension(controlPointImage);
         
-        reg_changeDatatype<PRECISION_TYPE>(sourceImageCopy);
-        reg_changeDatatype<PRECISION_TYPE>(targetImageCopy);
-        
-        for (int l = level; l < nLevels-1; l++)
-        {
-            int ratio = (int) powf(2.0f, l+1.0f);
-
-            bool sourceDownsampleAxis[8] = {true,true,true,true,true,true,true,true};
-            if ((sourceImage->nx/ratio) < 32) sourceDownsampleAxis[1] = false;
-            if ((sourceImage->ny/ratio) < 32) sourceDownsampleAxis[2] = false;
-            if ((sourceImage->nz/ratio) < 32) sourceDownsampleAxis[3] = false;
-            reg_downsampleImage<PRECISION_TYPE>(sourceImageCopy, 1, sourceDownsampleAxis);
-
-            bool targetDownsampleAxis[8] = {true,true,true,true,true,true,true,true};
-            if ((targetImage->nx/ratio) < 32) targetDownsampleAxis[1] = false;
-            if ((targetImage->ny/ratio) < 32) targetDownsampleAxis[2] = false;
-            if ((targetImage->nz/ratio) < 32) targetDownsampleAxis[3] = false;
-            reg_downsampleImage<PRECISION_TYPE>(targetImageCopy, 1, targetDownsampleAxis);
-
-            if (usingTargetMask)
-                reg_downsampleImage<PRECISION_TYPE>(targetMaskImageCopy, 0, targetDownsampleAxis);
-        }
-        
-        int activeVoxelNumber = 0;
-        int *targetMask = (int *) calloc(targetImageCopy->nvox, sizeof(int));
-        if (usingTargetMask)
-        {
-            reg_tool_binaryImage2int(targetMaskImageCopy, targetMask, activeVoxelNumber);
-            nifti_image_free(targetMaskImageCopy);
-        }
+        // Calculate deformation field from the control point image
+        if(controlPointImage->pixdim[5] > 1)
+            reg_bspline_getDeformationFieldFromVelocityGrid(controlPointImage, deformationFieldImage);
         else
-        {
-            for (unsigned int j = 0; j < targetImageCopy->nvox; j++)
-                targetMask[j] = j;
-            activeVoxelNumber = targetImageCopy->nvox;
-        }
-        
-        // Allocate the deformation field image
-        positionFieldImage = create_position_field(targetImageCopy, twoDimRegistration);
-        
-        // Allocate the result image
-        resultImage = nifti_copy_nim_info(targetImageCopy);
-        resultImage->datatype = sourceImageCopy->datatype;
-        resultImage->nbyper = sourceImageCopy->nbyper;
-        resultImage->data = calloc(1, nifti_get_volsize(resultImage));
-
-        // Initialise the block matching - all the blocks are used during the first level
-        _reg_blockMatchingParam blockMatchingParams;
-        initialise_block_matching_method(targetImageCopy, &blockMatchingParams, (level==0 ? 100 : useBlockPercentage), 50, targetMask, 0);
-
-        if (verbose)
-        {
-            // Display some parameters specific to the current level
-            Rprintf("Current level %i / %i\n", level+1, nLevels);
-            Rprintf("Target image size: \t%ix%ix%i voxels\t%gx%gx%g mm\n", targetImageCopy->nx, targetImageCopy->ny, targetImageCopy->nz, targetImageCopy->dx, targetImageCopy->dy, targetImageCopy->dz);
-            Rprintf("Source image size: \t%ix%ix%i voxels\t%gx%gx%g mm\n", sourceImageCopy->nx, sourceImageCopy->ny, sourceImageCopy->nz, sourceImageCopy->dx, sourceImageCopy->dy, sourceImageCopy->dz);
-            if (twoDimRegistration)
-                Rprintf("Block size = [4 4 1]\n");
-            else
-                Rprintf("Block size = [4 4 4]\n");
-            Rprintf("Block number = [%i %i %i]\n", blockMatchingParams.blockNumber[0], blockMatchingParams.blockNumber[1], blockMatchingParams.blockNumber[2]);
-            Rprintf("* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *\n");
-            reg_mat44_disp(affineTransformation, (char *) "Initial affine transformation");
-        }
-
-        int nLoops = ((type==AFFINE && level==0) ? 2 : 1);
-        int currentType, iteration;
-        mat44 updateAffineMatrix;
-        
-        for (i = 0; i < nLoops; i++)
-        {
-            // The first optimisation is rigid even if the final scope is affine
-            currentType = ((i==0 && nLoops==2) ? RIGID : type);
-            iteration = 0;
-            
-            // Twice as many iterations are performed during the first level
-            while (iteration < (level==0 ? 2*maxIterations : maxIterations))
-            {
-                // Compute the affine transformation deformation field
-                reg_affine_positionField(affineTransformation, targetImageCopy, positionFieldImage);
-                
-                // Resample the source image
-                reg_resampleSourceImage(targetImageCopy, sourceImageCopy, resultImage, positionFieldImage, targetMask, 1, sourceBGValue);
-                
-                // Compute the correspondances between blocks - this is the expensive bit
-                block_matching_method<PRECISION_TYPE>(targetImageCopy, resultImage, &blockMatchingParams, targetMask);
-                
-                // Optimise the update matrix
-                optimize(&blockMatchingParams, &updateAffineMatrix, currentType);
-                
-                // Update the affine transformation matrix
-                *affineTransformation = reg_mat44_mul(affineTransformation, &(updateAffineMatrix));
-                    
-                if (reg_test_convergence(&updateAffineMatrix))
-                    break;
-                
-                iteration++;
-            }
-        }
-        
-        completedIterations[level] = iteration;
-
-        free(targetMask);
-        nifti_image_free(resultImage);
-        nifti_image_free(targetImageCopy);
-        nifti_image_free(sourceImageCopy);
-        
-        if (level < (nLevels - 1))
-            nifti_image_free(positionFieldImage);
-        
-        if (verbose)
-        {
-            reg_mat44_disp(affineTransformation, (char *)"Final affine transformation");
-            Rprintf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
-        }
+            reg_spline_getDeformationField(controlPointImage, targetImage, deformationFieldImage, NULL, false, true);
+    }
+    else
+    {
+        // Calculate deformation field from the affine matrix
+        reg_affine_positionField(affineTransformation, targetImage, deformationFieldImage);
     }
     
-    if (nLevels == 0)
-        positionFieldImage = create_position_field(targetImage, twoDimRegistration);
-    
-    // The corresponding deformation field is evaluated and saved
-    reg_affine_positionField(affineTransformation, targetImage, positionFieldImage);
-    
-    // The source data type is changed for precision if requested
-    if (finalPrecision == INTERP_PREC_DOUBLE)
-        reg_changeDatatype<double>(sourceImage);
-
-    // The result image is resampled using a cubic spline interpolation
-    resultImage = nifti_copy_nim_info(targetImage);
+    // Allocate result image
+    nifti_image *resultImage = nifti_copy_nim_info(targetImage);
+    resultImage->dim[0] = resultImage->ndim = sourceImage->dim[0];
+    resultImage->dim[4] = resultImage->nt = sourceImage->dim[4];
     resultImage->cal_min = sourceImage->cal_min;
     resultImage->cal_max = sourceImage->cal_max;
     resultImage->scl_slope = sourceImage->scl_slope;
     resultImage->scl_inter = sourceImage->scl_inter;
     resultImage->datatype = sourceImage->datatype;
     resultImage->nbyper = sourceImage->nbyper;
-    resultImage->data = calloc(resultImage->nvox, resultImage->nbyper);
-    reg_resampleSourceImage(targetImage, sourceImage, resultImage, positionFieldImage, NULL, finalInterpolation, sourceBGValue);
+    resultImage->nvox = resultImage->dim[1] * resultImage->dim[2] * resultImage->dim[3] * resultImage->dim[4];
+    resultImage->data = (void *) calloc(resultImage->nvox, resultImage->nbyper);
     
-    nifti_image_free(positionFieldImage);
+    // Resample source image to target space
+    reg_resampleSourceImage(targetImage, sourceImage, resultImage, deformationFieldImage, NULL, finalInterpolation, 0);
+    
+    // Free deformation field image
+    nifti_image_free(deformationFieldImage);
+    
+    return resultImage;
+}
+
+// Run the "aladin" registration algorithm
+aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage, int type, int nLevels, int maxIterations, int useBlockPercentage, int finalInterpolation, nifti_image *targetMaskImage, mat44 *affineTransformation, bool verbose)
+{
+    if (affineTransformation == NULL)
+        affineTransformation = create_init_affine(sourceImage, targetImage);
+    
+    // Binarise the mask images
+    if (targetMaskImage != NULL)
+        reg_tools_binarise_image(targetMaskImage);
+    
+    // The source data type is changed for interpolation precision if necessary
+    if (finalInterpolation != 0)
+        reg_tools_changeDatatype<double>(sourceImage);
     
     aladin_result result;
-    result.image = resultImage;
-    result.affine = affineTransformation;
-    result.completedIterations = completedIterations;
+    
+    if (nLevels == 0)
+    {
+        result.image = resample_image(sourceImage, targetImage, NULL, affineTransformation, finalInterpolation);
+        result.affine = (mat44 *) calloc(1, sizeof(mat44));
+        memcpy(result.affine, affineTransformation, sizeof(mat44));
+        result.completedIterations = NULL;
+    }
+    else
+    {
+        reg_aladin<PRECISION_TYPE> *reg = new reg_aladin<PRECISION_TYPE>;
+    
+        reg->SetMaxIterations(maxIterations);
+        reg->SetNumberOfLevels(nLevels);
+        reg->SetLevelsToPerform(nLevels);
+        reg->SetReferenceSigma(0.0);
+        reg->SetFloatingSigma(0.0);
+        reg->SetAlignCentre(1);
+        reg->SetPerformAffine((int) type == TYPE_AFFINE);
+        reg->SetPerformRigid(1);
+        reg->SetVerbose((int) verbose);
+        reg->SetBlockPercentage(useBlockPercentage);
+        reg->SetInlierLts(50.0);
+        reg->SetInterpolation(finalInterpolation);
+    
+        // Set the reference and floating images
+        reg->SetInputReference(targetImage);
+        reg->SetInputFloating(sourceImage);
+    
+        // Set the initial affine transformation
+        reg->SetTransformationMatrix(affineTransformation);
+    
+        // Set the reference mask if defined
+        if (targetMaskImage != NULL)
+            reg->SetInputMask(targetMaskImage);
+    
+        // Run the registration
+        reg->Run();
+    
+        int *completedIterations = (int *) calloc(nLevels, sizeof(int));
+        memcpy(completedIterations, reg->GetCompletedIterations(), nLevels*sizeof(int));
+    
+        // Store the results
+        result.image = copy_complete_nifti_image(reg->GetFinalWarpedImage());
+        result.affine = (mat44 *) calloc(1, sizeof(mat44));
+        memcpy(result.affine, reg->GetTransformationMatrix(), sizeof(mat44));
+        result.completedIterations = completedIterations;
+    
+        delete reg;
+    }
     
     return result;
 }
 
-f3d_result do_reg_f3d (nifti_image *sourceImage, nifti_image *targetImage, int finalPrecision, int nLevels, int maxIterations, int finalInterpolation, nifti_image *targetMaskImage, nifti_image *controlPointImage, mat44 *affineTransformation, int nBins, float *spacing, float bendingEnergyWeight, float jacobianWeight, bool verbose)
+f3d_result do_reg_f3d (nifti_image *sourceImage, nifti_image *targetImage, int nLevels, int maxIterations, int finalInterpolation, nifti_image *sourceMaskImage, nifti_image *targetMaskImage, nifti_image *controlPointImage, mat44 *affineTransformation, int nBins, float *spacing, float bendingEnergyWeight, float jacobianWeight, float inverseConsistencyWeight, bool symmetric, bool verbose)
 {
     if (controlPointImage == NULL && affineTransformation == NULL)
         affineTransformation = create_init_affine(sourceImage, targetImage);
+    else if (controlPointImage != NULL)
+        affineTransformation = NULL;
     
-    // Binarise the mask image
+    // Binarise the mask images
     if (targetMaskImage != NULL)
-        reg_tool_binarise_image(targetMaskImage);
+        reg_tools_binarise_image(targetMaskImage);
+    if (sourceMaskImage != NULL)
+        reg_tools_binarise_image(sourceMaskImage);
     
-    // The source data type is changed for precision if requested
-    if (finalPrecision == INTERP_PREC_DOUBLE)
-        reg_changeDatatype<double>(sourceImage);
+    // Change data types for interpolation precision if necessary
+    if (finalInterpolation != 0)
+    {
+        reg_tools_changeDatatype<double>(sourceImage);
+        if (symmetric)
+            reg_tools_changeDatatype<double>(targetImage);
+    }
     
     f3d_result result;
     
     if (nLevels == 0)
     {
-        // Allocate and set completed iterations (nothing will be done so this is zero)
-        int *completedIterations = (int *) calloc(1, sizeof(int));
-        *completedIterations = 0;
-        
-        reg_checkAndCorrectDimension(controlPointImage);
-        
-        // Allocate a deformation field image
-        nifti_image *deformationFieldImage = create_position_field(targetImage, targetImage->nz <= 1);
-        
-        // Calculate deformation field from the control point image
-        if(controlPointImage->pixdim[5] > 1)
-            reg_getDeformationFieldFromVelocityGrid(controlPointImage, deformationFieldImage, NULL, false);
-        else
-            reg_spline_getDeformationField(controlPointImage, targetImage, deformationFieldImage, NULL, false, true);
-        
-        // Allocate result image
-        nifti_image *resultImage = nifti_copy_nim_info(targetImage);
-        resultImage->dim[0] = resultImage->ndim = sourceImage->dim[0];
-        resultImage->dim[4] = resultImage->nt = sourceImage->dim[4];
-        resultImage->cal_min = sourceImage->cal_min;
-        resultImage->cal_max = sourceImage->cal_max;
-        resultImage->scl_slope = sourceImage->scl_slope;
-        resultImage->scl_inter = sourceImage->scl_inter;
-        resultImage->datatype = sourceImage->datatype;
-        resultImage->nbyper = sourceImage->nbyper;
-        resultImage->nvox = resultImage->dim[1] * resultImage->dim[2] * resultImage->dim[3] * resultImage->dim[4];
-        resultImage->data = (void *) calloc(resultImage->nvox, resultImage->nbyper);
-        
-        // Resample source image to target space
-        reg_resampleSourceImage(targetImage, sourceImage, resultImage, deformationFieldImage, NULL, finalInterpolation, 0);
-        
-        // Free deformation field image
-        nifti_image_free(deformationFieldImage);
-        
-        result.image = resultImage;
-        result.controlPoints = copy_complete_nifti_image(controlPointImage);
-        result.completedIterations = completedIterations;
+        result.initAffine = NULL;
+        result.forwardImage = resample_image(sourceImage, targetImage, controlPointImage, affineTransformation, finalInterpolation);
+        result.forwardControlPoints = copy_complete_nifti_image(controlPointImage);
+        result.reverseImage = NULL;
+        result.reverseControlPoints = NULL;
+        result.completedIterations = NULL;
     }
     else
     {
-        // Create the object encapsulating the registration
-        reg_f3d<PRECISION_TYPE> *reg = new reg_f3d<PRECISION_TYPE>(targetImage->nt, sourceImage->nt);
-        
-        // Create a vector to hold the number of completed iterations
-        int *completedIterations = (int *) calloc(nLevels, sizeof(int));
+        reg_f3d<PRECISION_TYPE> *reg = NULL;
 
+        // Create the reg_f3d object
+        if (symmetric)
+            reg = new reg_f3d_sym<PRECISION_TYPE>(targetImage->nt, sourceImage->nt);
+        else
+            reg = new reg_f3d<PRECISION_TYPE>(targetImage->nt, sourceImage->nt);
+        
 #ifdef _OPENMP
         int maxThreadNumber = omp_get_max_threads();
         if (verbose)
-            Rprintf("[NiftyReg F3D] OpenMP is used with %i thread(s)\n", maxThreadNumber);
+            Rprintf("[NiftyReg F3D] Using OpenMP with %i thread(s)\n", maxThreadNumber);
 #endif
 
         // Set the reg_f3d parameters
         reg->SetReferenceImage(targetImage);
         reg->SetFloatingImage(sourceImage);
-
+        
         if (verbose)
             reg->PrintOutInformation();
         else
             reg->DoNotPrintOutInformation();
-
+        
         if (targetMaskImage != NULL)
-           reg->SetReferenceMask(targetMaskImage);
-
+            reg->SetReferenceMask(targetMaskImage);
+        
         if (controlPointImage != NULL)
-           reg->SetControlPointGridImage(controlPointImage);
-
+            reg->SetControlPointGridImage(controlPointImage);
+        
         if (affineTransformation != NULL)
-           reg->SetAffineTransformation(affineTransformation);
-
-        reg->SetBendingEnergyWeight(bendingEnergyWeight);
-
-        // if (linearEnergyWeight0==linearEnergyWeight0 || linearEnergyWeight1==linearEnergyWeight1 || linearEnergyWeight2==linearEnergyWeight2)
-        // {
-        //     if(linearEnergyWeight0!=linearEnergyWeight0) linearEnergyWeight0=0.0;
-        //     if(linearEnergyWeight1!=linearEnergyWeight1) linearEnergyWeight1=0.0;
-        //     if(linearEnergyWeight2!=linearEnergyWeight2) linearEnergyWeight2=0.0;
-        //     reg->SetLinearEnergyWeights(linearEnergyWeight0,linearEnergyWeight1,linearEnergyWeight2);
-        // }
-    
-        reg->SetJacobianLogWeight(jacobianWeight);
-
-        reg->SetMaximalIterationNumber(maxIterations);
-
-        if (nBins > 0)
         {
-            for (int i = 0; i < targetImage->nt; i++)
+            if (symmetric)
             {
-                reg->SetReferenceBinNumber(i, (unsigned) nBins);
-                reg->SetFloatingBinNumber(i, (unsigned) nBins);
+                mat44 inverseTransformation = nifti_mat44_inverse(*affineTransformation);
+                if (sourceImage->sform_code > 0)
+                    sourceImage->sto_xyz = reg_mat44_mul(&inverseTransformation, &(sourceImage->sto_xyz));
+                else
+                {
+                    sourceImage->sform_code = 1;
+                    sourceImage->sto_xyz = reg_mat44_mul(&inverseTransformation, &(sourceImage->qto_xyz));
+                }
+                sourceImage->sto_ijk = nifti_mat44_inverse(sourceImage->sto_xyz);
             }
+            else
+                reg->SetAffineTransformation(affineTransformation);
         }
-
+        
+        reg->SetBendingEnergyWeight(bendingEnergyWeight);
+        reg->SetLinearEnergyWeights(0.0, 0.0);
+        reg->SetL2NormDisplacementWeight(0.0);
+        reg->SetJacobianLogWeight(jacobianWeight);
+        
+        reg->SetMaximalIterationNumber(maxIterations);
+        
         for (int i = 0; i < 3; i++)
             reg->SetSpacing((unsigned) i, (PRECISION_TYPE) spacing[i]);
-
+        
         reg->SetLevelNumber(nLevels);
         reg->SetLevelToPerform(nLevels);
 
@@ -684,16 +586,34 @@ f3d_result do_reg_f3d (nifti_image *sourceImage, nifti_image *targetImage, int f
             reg->UseLinearInterpolation();
         else
             reg->UseNeareatNeighborInterpolation();
-    
+        
+        // Parameters only relevant to the symmetric version of the algorithm
+        if (symmetric)
+        {
+            if (sourceMaskImage != NULL)
+                reg->SetFloatingMask(sourceMaskImage);
+            
+            reg->SetInverseConsistencyWeight(inverseConsistencyWeight);
+        }
+        
         // Run the registration
         reg->Run_f3d();
-    
+        
+        int *completedIterations = (int *) calloc(nLevels, sizeof(int));
         memcpy(completedIterations, reg->GetCompletedIterations(), nLevels*sizeof(int));
-
-        result.image = reg->GetWarpedImage();
-        result.controlPoints = reg->GetControlPointPositionImage();
+        
+        result.forwardImage = reg->GetWarpedImage()[0];
+        result.forwardControlPoints = reg->GetControlPointPositionImage();
+        if (symmetric)
+        {
+            result.initAffine = affineTransformation;
+            result.reverseImage = reg->GetWarpedImage()[1];
+            result.reverseControlPoints = reg->GetBackwardControlPointPositionImage();
+        }
+        else
+            result.initAffine = NULL;
         result.completedIterations = completedIterations;
-    
+        
         // Erase the registration object
         delete reg;
     }
