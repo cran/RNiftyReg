@@ -1,7 +1,7 @@
-fab118195ab8eb16322f65e6582a7a5e *DESCRIPTION
+476c012329e4f7319c385048dad6d4e6 *DESCRIPTION
 eb723b61539feef013de476e68b5c50a *LICENCE
 1ee65ccca13b6c8bee6e61ae4790127f *NAMESPACE
-e0b35d54e5fa23c69330914df42bafa1 *NEWS
+1fda2c608048c20db16c56755b4b4e05 *NEWS
 c4515f6f4969db031b22a13a9c41fae1 *R/affine.R
 00c3f0e63ab3689dd645abbfcdaf413f *R/niftyreg.R
 e4809ec904337af9c3801fbefc1c7e79 *R/xform.R
@@ -23,7 +23,7 @@ db53c475108f0dd0a82ae5134ae0083f *src/_reg_aladin.h
 c23de6ab57c46ef168d16eaeaa842b75 *src/_reg_blockMatching.h
 16ca235c4a9f3295aadbdd0e69f90471 *src/_reg_f3d.cpp
 0948a547087c32f243802dca6cc75b9d *src/_reg_f3d.h
-1a8a96be43d49c9fc3902538d98b6f61 *src/_reg_f3d_sym.cpp
+35226115b1104a8adb89ddc62a71ff34 *src/_reg_f3d_sym.cpp
 c54eb090f65ba781b69bbcc0a55f32c2 *src/_reg_f3d_sym.h
 16937fffcb20db3c0a78af3e84d3c72a *src/_reg_femTransformation.cpp
 15a98029ae8841e76aa1d16376d0dff0 *src/_reg_femTransformation.h
@@ -34,7 +34,7 @@ c54eb090f65ba781b69bbcc0a55f32c2 *src/_reg_f3d_sym.h
 6d1805e082831ded58a7a6a1987e2da2 *src/_reg_localTransformation_be.cpp
 78db0b9878755dbb6bbdfc8b3283288e *src/_reg_localTransformation_jac.cpp
 256de9f9b72ad3876bd098b258687d35 *src/_reg_macros.h
-c6c8a8624c7730382fbc5d92b7e9c2ae *src/_reg_maths.cpp
+24803b4e1f3d142f8143a93902de2f32 *src/_reg_maths.cpp
 01f9cf9d06150a933aa9070a448a68bc *src/_reg_maths.h
 6b927076f5780d9d2f5fb083aa241b04 *src/_reg_mutualinformation.cpp
 1fb51f0fbcc34f66f9e7c70940bad396 *src/_reg_mutualinformation.h
@@ -43,7 +43,7 @@ d3a0226dd7444ee75a0aa55f03e3cfe3 *src/_reg_resampling.cpp
 2af86ddedf66b9da916ea83a452f9d5c *src/_reg_ssd.cpp
 3db6d8f526a9fab838caadf5fb349ed2 *src/_reg_ssd.h
 4e8fd135891b1c20a1a354d93c52b7b1 *src/_reg_tools.cpp
-8c67a54c842f015a3d9f5d7f5597392c *src/_reg_tools.h
+95cd89af996c45160ddec0a9acbb4d8f *src/_reg_tools.h
 abd98bc8cd7bb7cbd53af02a8adb2901 *src/exit.cpp
 8a40cf180b9ad45e9de5ce63f85889d5 *src/exit.h
 1bc087b9e954b8b395d9379d43158f6e *src/nifti1.h
