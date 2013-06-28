@@ -13,7 +13,7 @@ niftyreg.nonlinear(source, target, targetMask = NULL, initAffine = NULL,
     maxIterations = 300, nBins = 64, bendingEnergyWeight = 0.005,
     jacobianWeight = 0, inverseConsistencyWeight = 0.01,
     finalSpacing = c(5,5,5), spacingUnit = c("vox","mm"),
-    finalInterpolation = 3, verbose = FALSE)
+    finalInterpolation = 3, verbose = FALSE, estimateOnly = FALSE)
 
 applyControlPoints(controlPointImage, source, target,
     finalInterpolation = 3)
@@ -37,6 +37,7 @@ applyControlPoints(controlPointImage, source, target,
   \item{spacingUnit}{A character string giving the units in which the \code{finalSpacing} is specified: either \code{"vox"} for voxels or \code{"mm"} for millimetres (which is assumed to be the spatial unit of the source and target images).}
   \item{finalInterpolation}{A single integer specifying the type of interpolation to be applied to the final resampled image. May be 0 (nearest neighbour), 1 (trilinear) or 3 (cubic spline). No other values are valid.}
   \item{verbose}{A single logical value: if \code{TRUE}, the code will give some feedback on its progress; otherwise, nothing will be output while the algorithm runs.}
+  \item{estimateOnly}{A single logical value: if \code{TRUE}, the transformation(s) will be estimated but the image(s) will not be resampled.}
   \item{controlPointImage}{For \code{applyControlPoints}, the control point map to apply to the source image.}
 }
 
@@ -72,4 +73,4 @@ M. Modat, G.R. Ridgway, Z.A. Taylor, M. Lehmann, J. Barnes, D.J. Hawkes, N.C. Fo
 
 \author{Jon Clayden <jon.clayden+rniftyreg@gmail.com>}
 
-\seealso{\code{\link{niftyreg}}, which can be used as an interface to this function, and \code{\link{niftyreg.linear}} for linear registration. See \code{nifti} (no relation!), in the \code{oro.nifti} package, for creating the image objects passed to this function. Useful related functions are \code{as.nifti}, \code{readNIfTI} and \code{writeNIfTI}.}
+\seealso{\code{\link{niftyreg}}, which can be used as an interface to this function, and \code{\link{niftyreg.linear}} for linear registration. Also, \code{\link{transformWithControlPoints}} for transforming points, rather than images, using the estimated control points. See \code{nifti} (no relation!), in the \code{oro.nifti} package, for creating the image objects passed to this function. Useful related functions are \code{as.nifti}, \code{readNIfTI} and \code{writeNIfTI}.}
