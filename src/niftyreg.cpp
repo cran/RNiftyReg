@@ -15,24 +15,28 @@
 #include <Rdefines.h>
 #include <Rinternals.h>
 
+#include <Rmath.h>
+#undef dt
+
 #include "niftyreg.h"
 #include "substitutions.h"
+#include "index.h"
 
 extern "C"
-SEXP reg_aladin_R (SEXP source, SEXP target, SEXP type, SEXP nLevels, SEXP maxIterations, SEXP useBlockPercentage, SEXP finalInterpolation, SEXP targetMask, SEXP affineComponents, SEXP verbose)
+SEXP reg_aladin_R (SEXP source, SEXP target, SEXP type, SEXP nLevels, SEXP maxIterations, SEXP useBlockPercentage, SEXP finalInterpolation, SEXP targetMask, SEXP affineComponents, SEXP verbose, SEXP estimateOnly)
 {
     int i, j, levels = *(INTEGER(nLevels));
     SEXP returnValue, completedIterations;
     
     bool affineProvided = !isNull(affineComponents);
     
-    nifti_image *sourceImage = s4_image_to_struct(source);
-    nifti_image *targetImage = s4_image_to_struct(target);
+    nifti_image *sourceImage = s4_image_to_struct(source, true);
+    nifti_image *targetImage = s4_image_to_struct(target, (levels>0));
     nifti_image *targetMaskImage = NULL;
     mat44 *affineTransformation = NULL;
     
     if (!isNull(targetMask))
-        targetMaskImage = s4_image_to_struct(targetMask);
+        targetMaskImage = s4_image_to_struct(targetMask, true);
     
     if (affineProvided)
     {
@@ -46,7 +50,7 @@ SEXP reg_aladin_R (SEXP source, SEXP target, SEXP type, SEXP nLevels, SEXP maxIt
     
     int regType = (strcmp(CHAR(STRING_ELT(type,0)),"rigid")==0 ? TYPE_RIGID : TYPE_AFFINE);
     
-    aladin_result result = do_reg_aladin(sourceImage, targetImage, regType, *(INTEGER(nLevels)), *(INTEGER(maxIterations)), *(INTEGER(useBlockPercentage)), *(INTEGER(finalInterpolation)), targetMaskImage, affineTransformation, (*(INTEGER(verbose)) == 1));
+    aladin_result result = do_reg_aladin(sourceImage, targetImage, regType, *(INTEGER(nLevels)), *(INTEGER(maxIterations)), *(INTEGER(useBlockPercentage)), *(INTEGER(finalInterpolation)), targetMaskImage, affineTransformation, (*(INTEGER(verbose)) == 1), (*(INTEGER(estimateOnly)) == 1));
     
     PROTECT(returnValue = NEW_LIST(3));
     
@@ -69,7 +73,8 @@ SEXP reg_aladin_R (SEXP source, SEXP target, SEXP type, SEXP nLevels, SEXP maxIt
     nifti_image_free(targetImage);
     if (targetMaskImage != NULL)
         nifti_image_free(targetMaskImage);
-    nifti_image_free(result.image);
+    if (result.image != NULL)
+        nifti_image_free(result.image);
     free(result.affine);
     if (result.completedIterations != NULL)
         free(result.completedIterations);
@@ -80,7 +85,7 @@ SEXP reg_aladin_R (SEXP source, SEXP target, SEXP type, SEXP nLevels, SEXP maxIt
 }
 
 extern "C"
-SEXP reg_f3d_R (SEXP source, SEXP target, SEXP nLevels, SEXP maxIterations, SEXP nBins, SEXP bendingEnergyWeight, SEXP jacobianWeight, SEXP inverseConsistencyWeight, SEXP finalSpacing, SEXP finalInterpolation, SEXP targetMask, SEXP sourceMask, SEXP affineComponents, SEXP initControl, SEXP symmetric, SEXP verbose)
+SEXP reg_f3d_R (SEXP source, SEXP target, SEXP nLevels, SEXP maxIterations, SEXP nBins, SEXP bendingEnergyWeight, SEXP jacobianWeight, SEXP inverseConsistencyWeight, SEXP finalSpacing, SEXP finalInterpolation, SEXP targetMask, SEXP sourceMask, SEXP affineComponents, SEXP initControl, SEXP symmetric, SEXP verbose, SEXP estimateOnly)
 {
     int i, j, levels = *(INTEGER(nLevels));
     SEXP returnValue, completedIterations;
@@ -88,19 +93,19 @@ SEXP reg_f3d_R (SEXP source, SEXP target, SEXP nLevels, SEXP maxIterations, SEXP
     bool affineProvided = !isNull(affineComponents);
     bool useSymmetricAlgorithm = (*(INTEGER(symmetric)) == 1);
     
-    nifti_image *sourceImage = s4_image_to_struct(source);
-    nifti_image *targetImage = s4_image_to_struct(target);
+    nifti_image *sourceImage = s4_image_to_struct(source, true);
+    nifti_image *targetImage = s4_image_to_struct(target, (levels>0));
     nifti_image *sourceMaskImage = NULL;
     nifti_image *targetMaskImage = NULL;
     nifti_image *controlPointImage = NULL;
     mat44 *affineTransformation = NULL;
     
     if (!isNull(sourceMask) && useSymmetricAlgorithm)
-        sourceMaskImage = s4_image_to_struct(sourceMask);
+        sourceMaskImage = s4_image_to_struct(sourceMask, true);
     if (!isNull(targetMask))
-        targetMaskImage = s4_image_to_struct(targetMask);
+        targetMaskImage = s4_image_to_struct(targetMask, true);
     if (!isNull(initControl))
-        controlPointImage = s4_image_to_struct(initControl);
+        controlPointImage = s4_image_to_struct(initControl, true);
     
     if (affineProvided)
     {
@@ -116,7 +121,7 @@ SEXP reg_f3d_R (SEXP source, SEXP target, SEXP nLevels, SEXP maxIterations, SEXP
     for (i = 0; i < 3; i++)
         spacing[i] = (float) REAL(finalSpacing)[i];
         
-    f3d_result result = do_reg_f3d(sourceImage, targetImage, *(INTEGER(nLevels)), *(INTEGER(maxIterations)), *(INTEGER(finalInterpolation)), sourceMaskImage, targetMaskImage, controlPointImage, affineTransformation, *(INTEGER(nBins)), spacing, (float) *(REAL(bendingEnergyWeight)), (float) *(REAL(jacobianWeight)), (float) *(REAL(inverseConsistencyWeight)), useSymmetricAlgorithm, (*(INTEGER(verbose)) == 1));
+    f3d_result result = do_reg_f3d(sourceImage, targetImage, *(INTEGER(nLevels)), *(INTEGER(maxIterations)), *(INTEGER(finalInterpolation)), sourceMaskImage, targetMaskImage, controlPointImage, affineTransformation, *(INTEGER(nBins)), spacing, (float) *(REAL(bendingEnergyWeight)), (float) *(REAL(jacobianWeight)), (float) *(REAL(inverseConsistencyWeight)), useSymmetricAlgorithm, (*(INTEGER(verbose)) == 1), (*(INTEGER(estimateOnly)) == 1));
     
     if (useSymmetricAlgorithm)
         PROTECT(returnValue = NEW_LIST(8));
@@ -153,7 +158,8 @@ SEXP reg_f3d_R (SEXP source, SEXP target, SEXP nLevels, SEXP maxIterations, SEXP
         nifti_image_free(targetMaskImage);
     if (controlPointImage != NULL)
         nifti_image_free(controlPointImage);
-    nifti_image_free(result.forwardImage);
+    if (result.forwardImage != NULL)
+        nifti_image_free(result.forwardImage);
     nifti_image_free(result.forwardControlPoints);
     if (result.completedIterations != NULL)
         free(result.completedIterations);
@@ -165,8 +171,200 @@ SEXP reg_f3d_R (SEXP source, SEXP target, SEXP nLevels, SEXP maxIterations, SEXP
     return returnValue;
 }
 
+extern "C"
+SEXP get_deformation_field_R (SEXP affine, SEXP control, SEXP target, SEXP jacobian)
+{
+    int i, j;
+    nifti_image *targetImage, *controlPointImage, *deformationFieldImage, *jacobianImage;
+    mat44 *affineTransformation;
+    SEXP returnValue;
+    
+    targetImage = s4_image_to_struct(target, false);
+    
+    if (isNull(control))
+    {
+        affineTransformation = (mat44 *) calloc(1, sizeof(mat44));
+        for (i = 0; i < 4; i++)
+        {
+            for (j = 0; j < 4; j++)
+                affineTransformation->m[i][j] = (float) REAL(affine)[(j*4)+i];
+        }
+        
+        deformationFieldImage = get_deformation_field(targetImage, NULL, affineTransformation);
+        free(affineTransformation);
+    }
+    else
+    {
+        controlPointImage = s4_image_to_struct(control, true);
+        deformationFieldImage = get_deformation_field(targetImage, controlPointImage, NULL);
+        nifti_image_free(controlPointImage);
+    }
+    
+    PROTECT(returnValue = NEW_LIST(2 + 2*asLogical(jacobian)));
+    convert_and_insert_image(deformationFieldImage, returnValue, 0);
+    convert_and_insert_xform(deformationFieldImage, returnValue, 1);
+    
+    if (asLogical(jacobian))
+    {
+        jacobianImage = nifti_copy_nim_info(targetImage);
+        jacobianImage->cal_min = 0;
+        jacobianImage->cal_max = 0;
+        jacobianImage->scl_slope = 1.0;
+        jacobianImage->scl_inter = 0.0;
+        jacobianImage->datatype = NIFTI_TYPE_FLOAT64;
+        jacobianImage->nbyper = 8;
+        jacobianImage->data = (void *) calloc(jacobianImage->nvox, jacobianImage->nbyper);
+
+        reg_defField_getJacobianMap(deformationFieldImage, jacobianImage);
+        convert_and_insert_image(jacobianImage, returnValue, 2);
+        convert_and_insert_xform(jacobianImage, returnValue, 3);
+        nifti_image_free(jacobianImage);
+    }
+    
+    nifti_image_free(deformationFieldImage);
+    
+    UNPROTECT(1);
+    
+    return returnValue;
+}
+
+extern "C"
+SEXP cp_transform_R (SEXP control, SEXP target, SEXP points, SEXP useNearest)
+{
+    int i, j, k, l;
+    size_t v, w, closestVoxel;
+    R_len_t resultLength;
+    double currentDistance, closestDistance;
+    int closestIndex[3], currentIndex[3], offset[3];
+    double currentPoint[3], closestLoc[3];
+    
+    SEXP currentResult;
+    double *p;
+    
+    double *inputPointer = REAL(points);
+    int nPoints = INTEGER(getAttrib(points, R_DimSymbol))[0];
+    int nDims = INTEGER(getAttrib(points, R_DimSymbol))[1];
+    
+    nifti_image *targetImage = s4_image_to_struct(target, false);
+    nifti_image *controlPointImage = s4_image_to_struct(control, true);
+    nifti_image *deformationFieldImage = get_deformation_field(targetImage, controlPointImage, NULL);
+    nifti_image_free(targetImage);
+    nifti_image_free(controlPointImage);
+    
+    int deformationDims[3] = { deformationFieldImage->nx, deformationFieldImage->ny, deformationFieldImage->nz };
+    size_t nVoxels = (size_t) deformationDims[0] * deformationDims[1] * deformationDims[2];
+    double *deformationPointer = (double *) deformationFieldImage->data;
+    
+    SEXP resultList;
+    PROTECT(resultList = NEW_LIST(nPoints));
+    
+    for (i=0; i<nPoints; i++)
+    {
+        closestDistance = R_PosInf;
+        
+        for (j=0; j<nDims; j++)
+            currentPoint[j] = inputPointer[i + j*nPoints];
+        
+        for (v=0; v<nVoxels; v++)
+        {
+            currentDistance = 0;
+            for (j=0; j<nDims; j++)
+                currentDistance += R_pow_di(deformationPointer[v + j*nVoxels] - currentPoint[j], 2);
+            currentDistance = sqrt(currentDistance);
+            
+            if (currentDistance < closestDistance)
+            {
+                closestDistance = currentDistance;
+                closestVoxel = v;
+            }
+        }
+        
+        vector_to_matrix_loc(closestVoxel, deformationDims, nDims, closestIndex);
+        for (j=0; j<nDims; j++)
+            closestLoc[j] = deformationPointer[closestVoxel + j*nVoxels];
+        
+        if (asLogical(useNearest) || closestDistance == 0.0)
+        {
+            PROTECT(currentResult = allocVector(REALSXP,nDims));
+            p = REAL(currentResult);
+            
+            for (j=0; j<nDims; j++)
+                p[j] = (double) closestIndex[j] + 1.0;
+        }
+        else
+        {
+            resultLength = (R_len_t) R_pow_di(4.0, nDims) * 2 * nDims;
+            PROTECT(currentResult = allocVector(REALSXP,resultLength));
+            p = REAL(currentResult);
+            
+            for (j=0; j<nDims; j++)
+            {
+                memcpy(currentIndex, closestIndex, nDims*sizeof(int));
+                
+                currentIndex[j]++;
+                matrix_to_vector_loc(currentIndex, deformationDims, nDims, &v);
+                offset[j] = (int) sign(deformationPointer[v + j*nVoxels] - closestLoc[j]);
+                offset[j] = (offset[j] >= 0 ? 0 : offset[j]);
+            }
+            
+            for (j=0; j<4; j++)
+            {
+                currentIndex[0] = closestIndex[0] + j + offset[0] - 1;
+                
+                for (k=0; k<4; k++)
+                {
+                    currentIndex[1] = closestIndex[1] + k + offset[1] - 1;
+                    
+                    if (nDims == 2)
+                    {
+                        currentIndex[2] = 0;
+                        matrix_to_vector_loc(currentIndex, deformationDims, nDims, &v);
+                    
+                        w = (size_t) j + k*4;
+                        p[2*nDims*w] = deformationPointer[v];
+                        p[2*nDims*w + 1] = deformationPointer[v + nVoxels];
+                        p[2*nDims*w + 2] = (double) currentIndex[0] + 1.0;
+                        p[2*nDims*w + 3] = (double) currentIndex[1] + 1.0;
+                    }
+                    else
+                    {
+                        for (l=0; l<4; l++)
+                        {
+                            currentIndex[2] = closestIndex[2] + l + offset[2] - 1;
+                            matrix_to_vector_loc(currentIndex, deformationDims, nDims, &v);
+                        
+                            w = (size_t) j + k*4 + l*16;
+                            p[2*nDims*w] = deformationPointer[v];
+                            p[2*nDims*w + 1] = deformationPointer[v + nVoxels];
+                            p[2*nDims*w + 2] = deformationPointer[v + 2*nVoxels];
+                            p[2*nDims*w + 3] = (double) currentIndex[0] + 1.0;
+                            p[2*nDims*w + 4] = (double) currentIndex[1] + 1.0;
+                            p[2*nDims*w + 5] = (double) currentIndex[2] + 1.0;
+                        }
+                    }
+                }
+            }
+        }
+        
+        SET_ELEMENT(resultList, i, currentResult);
+        UNPROTECT(1);
+    }
+    
+    nifti_image_free(deformationFieldImage);
+    
+    UNPROTECT(1);
+    
+    return resultList;
+}
+
 void convert_and_insert_image (nifti_image *image, SEXP list, int index)
 {
+    if (image == NULL)
+    {
+        SET_ELEMENT(list, index, R_NilValue);
+        return;
+    }
+    
     SEXP data;
     
     if (image->datatype == DT_INT32)
@@ -228,7 +426,7 @@ void convert_and_insert_affine (mat44 *affine, SEXP list, int index)
 }
 
 // Convert an S4 "nifti" object, as defined in the oro.nifti package, to a "nifti_image" struct
-nifti_image * s4_image_to_struct (SEXP object)
+nifti_image * s4_image_to_struct (SEXP object, bool copyData)
 {
     int i;
     nifti_1_header header;
@@ -299,12 +497,18 @@ nifti_image * s4_image_to_struct (SEXP object)
     
     nifti_image *image = nifti_convert_nhdr2nim(header, NULL);
     
-    size_t dataSize = nifti_get_volsize(image);
-    image->data = calloc(1, dataSize);
-    if (header.datatype == DT_INT32)
-        memcpy(image->data, INTEGER(GET_SLOT(object, install(".Data"))), dataSize);
+    SEXP data = GET_SLOT(object, install(".Data"));
+    if (!copyData || length(data) == 1)
+        image->data = NULL;
     else
-        memcpy(image->data, REAL(GET_SLOT(object, install(".Data"))), dataSize);
+    {
+        size_t dataSize = nifti_get_volsize(image);
+        image->data = calloc(1, dataSize);
+        if (header.datatype == DT_INT32)
+            memcpy(image->data, INTEGER(data), dataSize);
+        else
+            memcpy(image->data, REAL(data), dataSize);
+    }
     
     return image;
 }
@@ -356,7 +560,7 @@ mat44 * create_init_affine (nifti_image *sourceImage, nifti_image *targetImage)
     return affineTransformation;
 }
 
-nifti_image * resample_image (nifti_image *sourceImage, nifti_image *targetImage, nifti_image *controlPointImage, mat44 *affineTransformation, int finalInterpolation)
+nifti_image * get_deformation_field (nifti_image *targetImage, nifti_image *controlPointImage, mat44 *affineTransformation)
 {
     // Allocate a deformation field image
     nifti_image *deformationFieldImage = nifti_copy_nim_info(targetImage);
@@ -395,6 +599,14 @@ nifti_image * resample_image (nifti_image *sourceImage, nifti_image *targetImage
         reg_affine_positionField(affineTransformation, targetImage, deformationFieldImage);
     }
     
+    return deformationFieldImage;
+}
+
+nifti_image * resample_image (nifti_image *sourceImage, nifti_image *targetImage, nifti_image *controlPointImage, mat44 *affineTransformation, int finalInterpolation)
+{
+    // Get the deformation field
+    nifti_image *deformationFieldImage = get_deformation_field(targetImage, controlPointImage, affineTransformation);
+    
     // Allocate result image
     nifti_image *resultImage = nifti_copy_nim_info(targetImage);
     resultImage->dim[0] = resultImage->ndim = sourceImage->dim[0];
@@ -418,7 +630,7 @@ nifti_image * resample_image (nifti_image *sourceImage, nifti_image *targetImage
 }
 
 // Run the "aladin" registration algorithm
-aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage, int type, int nLevels, int maxIterations, int useBlockPercentage, int finalInterpolation, nifti_image *targetMaskImage, mat44 *affineTransformation, bool verbose)
+aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage, int type, int nLevels, int maxIterations, int useBlockPercentage, int finalInterpolation, nifti_image *targetMaskImage, mat44 *affineTransformation, bool verbose, bool estimateOnly)
 {
     if (affineTransformation == NULL)
         affineTransformation = create_init_affine(sourceImage, targetImage);
@@ -475,7 +687,10 @@ aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage,
         memcpy(completedIterations, reg->GetCompletedIterations(), nLevels*sizeof(int));
     
         // Store the results
-        result.image = copy_complete_nifti_image(reg->GetFinalWarpedImage());
+        if (estimateOnly)
+            result.image = NULL;
+        else
+            result.image = copy_complete_nifti_image(reg->GetFinalWarpedImage());
         result.affine = (mat44 *) calloc(1, sizeof(mat44));
         memcpy(result.affine, reg->GetTransformationMatrix(), sizeof(mat44));
         result.completedIterations = completedIterations;
@@ -486,7 +701,7 @@ aladin_result do_reg_aladin (nifti_image *sourceImage, nifti_image *targetImage,
     return result;
 }
 
-f3d_result do_reg_f3d (nifti_image *sourceImage, nifti_image *targetImage, int nLevels, int maxIterations, int finalInterpolation, nifti_image *sourceMaskImage, nifti_image *targetMaskImage, nifti_image *controlPointImage, mat44 *affineTransformation, int nBins, float *spacing, float bendingEnergyWeight, float jacobianWeight, float inverseConsistencyWeight, bool symmetric, bool verbose)
+f3d_result do_reg_f3d (nifti_image *sourceImage, nifti_image *targetImage, int nLevels, int maxIterations, int finalInterpolation, nifti_image *sourceMaskImage, nifti_image *targetMaskImage, nifti_image *controlPointImage, mat44 *affineTransformation, int nBins, float *spacing, float bendingEnergyWeight, float jacobianWeight, float inverseConsistencyWeight, bool symmetric, bool verbose, bool estimateOnly)
 {
     if (controlPointImage == NULL && affineTransformation == NULL)
         affineTransformation = create_init_affine(sourceImage, targetImage);
@@ -513,7 +728,13 @@ f3d_result do_reg_f3d (nifti_image *sourceImage, nifti_image *targetImage, int n
     {
         result.initAffine = NULL;
         result.forwardImage = resample_image(sourceImage, targetImage, controlPointImage, affineTransformation, finalInterpolation);
-        result.forwardControlPoints = copy_complete_nifti_image(controlPointImage);
+        if (controlPointImage != NULL)
+            result.forwardControlPoints = copy_complete_nifti_image(controlPointImage);
+        else
+        {
+            reg_createControlPointGrid<PRECISION_TYPE>(&result.forwardControlPoints, targetImage, spacing);
+            reg_bspline_initialiseControlPointGridWithAffine(affineTransformation, result.forwardControlPoints);
+        }
         result.reverseImage = NULL;
         result.reverseControlPoints = NULL;
         result.completedIterations = NULL;
@@ -602,12 +823,17 @@ f3d_result do_reg_f3d (nifti_image *sourceImage, nifti_image *targetImage, int n
         int *completedIterations = (int *) calloc(nLevels, sizeof(int));
         memcpy(completedIterations, reg->GetCompletedIterations(), nLevels*sizeof(int));
         
-        result.forwardImage = reg->GetWarpedImage()[0];
+        result.forwardImage = NULL;
+        result.reverseImage = NULL;
+        
+        if (!estimateOnly)
+            result.forwardImage = reg->GetWarpedImage()[0];
         result.forwardControlPoints = reg->GetControlPointPositionImage();
         if (symmetric)
         {
             result.initAffine = affineTransformation;
-            result.reverseImage = reg->GetWarpedImage()[1];
+            if (!estimateOnly)
+                result.reverseImage = reg->GetWarpedImage()[1];
             result.reverseControlPoints = reg->GetBackwardControlPointPositionImage();
         }
         else

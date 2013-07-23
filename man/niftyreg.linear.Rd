@@ -10,7 +10,8 @@ The \code{niftyreg.linear} function performs linear registration for two and thr
 \usage{
 niftyreg.linear(source, target, targetMask = NULL, initAffine = NULL,
     scope = c("affine","rigid"), nLevels = 3, maxIterations = 5,
-    useBlockPercentage = 50, finalInterpolation = 3, verbose = FALSE)
+    useBlockPercentage = 50, finalInterpolation = 3, verbose = FALSE,
+    estimateOnly = FALSE)
 
 applyAffine(affine, source, target, affineType = NULL,
     finalInterpolation = 3)
@@ -27,6 +28,7 @@ applyAffine(affine, source, target, affineType = NULL,
   \item{useBlockPercentage}{A single integer giving the percentage of blocks to use for calculating correspondence at each step of the algorithm. The blocks with the highest intensity variance will be chosen.}
   \item{finalInterpolation}{A single integer specifying the type of interpolation to be applied to the final resampled image. May be 0 (nearest neighbour), 1 (trilinear) or 3 (cubic spline). No other values are valid.}
   \item{verbose}{A single logical value: if \code{TRUE}, the code will give some feedback on its progress; otherwise, nothing will be output while the algorithm runs.}
+  \item{estimateOnly}{A single logical value: if \code{TRUE}, the transformation will be estimated but the source image will not be resampled.}
   \item{affine}{For \code{applyAffine}, the affine transformation(s) to apply to the source image.}
   \item{affineType}{For \code{applyAffine}, the storage convention type of the affine matrix, if it is not stored in the \code{affineType} attribute of the matrix.}
 }
@@ -63,4 +65,4 @@ S. Ourselin, R. Stefanescu & X. Pennec (2002). Robust registration of multi-moda
 
 \author{Jon Clayden <jon.clayden+rniftyreg@gmail.com>}
 
-\seealso{\code{\link{niftyreg}}, which can be used as an interface to this function, and \code{\link{niftyreg.nonlinear}} for nonlinear registration. See \code{nifti} (no relation!), in the \code{oro.nifti} package, for creating the image objects passed to this function. Useful related functions are \code{as.nifti}, \code{readNIfTI} and \code{writeNIfTI}.}
+\seealso{\code{\link{niftyreg}}, which can be used as an interface to this function, and \code{\link{niftyreg.nonlinear}} for nonlinear registration. Also, \code{\link{transformWithAffine}} for transforming points, rather than images, using the estimated affine matrices. See \code{nifti} (no relation!), in the \code{oro.nifti} package, for creating the image objects passed to this function. Useful related functions are \code{as.nifti}, \code{readNIfTI} and \code{writeNIfTI}.}
