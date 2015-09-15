@@ -1,418 +1,421 @@
-.fixTypes <- function (image)
-{
-    if (is.null(image))
-        return (NULL)
-    else
-    {
-        integerSlots <- c("dim_", "intent_code", "datatype", "bitpix", "slice_start", "slice_end", "slice_code", "xyzt_units", "qform_code", "sform_code")
-        numericSlots <- c("intent_p1", "intent_p2", "intent_p3", "slice_duration", "pixdim", "vox_offset", "scl_slope", "scl_inter", "toffset", "cal_max", "cal_min", "quatern_b", "quatern_c", "quatern_d", "qoffset_x", "qoffset_y", "qoffset_z", "srow_x", "srow_y", "srow_z")
-        
-        for (i in seq_along(integerSlots))
-            slot(image, integerSlots[i]) <- as.integer(slot(image, integerSlots[i]))
-        
-        for (i in seq_along(numericSlots))
-            slot(image, numericSlots[i]) <- as.numeric(slot(image, numericSlots[i]))
-        
-        invalidDatatypes <- c("COMPLEX64", "RGB24", "INT64", "UINT64", "FLOAT128", "COMPLEX128", "COMPLEX256", "RGBA32")
-        doubleDatatypes <- c("FLOAT32", "FLOAT64")
-        
-        datatypeName <- convert.datatype(image@datatype)
-        if (datatypeName %in% invalidDatatypes)
-            report(OL$Error, "RNiftyReg does not support the \"", datatypeName, "\" image data type")
-        else if (datatypeName %in% doubleDatatypes)
-            storage.mode(image@.Data) <- "double"
-        else
-            storage.mode(image@.Data) <- "integer"
-        
-        return (image)
-    }
-}
-
-.createControlPointImage <- function (data, dim, pixdim, xform)
-{
-    dim(data) <- dim
-    extendedDim <- c(length(dim), dim, rep(1,7-length(dim)))
-    
-    # The validity method for the "nifti" class requires this
-    if (xform[1] != 0 && xform[9] == 0)
-        xform[9] <- 1
-    
-    image <- new("nifti", .Data=data, dim_=extendedDim, datatype=64L, bitpix=64, pixdim=c(xform[9],pixdim,1,1,0,0), xyzt_units=0, qform_code=xform[1], sform_code=xform[2], quatern_b=xform[3], quatern_c=xform[4], quatern_d=xform[5], qoffset_x=xform[6], qoffset_y=xform[7], qoffset_z=xform[8], srow_x=xform[10:13], srow_y=xform[14:17], srow_z=xform[18:21], cal_min=min(data,na.rm=TRUE), cal_max=max(data,na.rm=TRUE))
-    
-    return (image)
-}
-
-.setImageMetadata <- function (image, referenceImage, finalInterpolation)
-{
-    if (is.null(image))
-        return (NULL)
-    
-    image@cal_min <- min(image@.Data, na.rm=TRUE)
-    image@cal_max <- max(image@.Data, na.rm=TRUE)
-    image@scl_slope <- referenceImage@scl_slope
-    image@scl_inter <- referenceImage@scl_inter
-    
-    if (finalInterpolation == 0)
-    {
-        image@datatype <- referenceImage@datatype
-        image@bitpix <- as.numeric(referenceImage@bitpix)
-    }
-    else
-    {
-        image@datatype <- 64L
-        image@bitpix <- 64
-    }
-    image@data_type <- convert.datatype(image@datatype)
-    
-    return (image)
-}
-
-niftyreg <- function (source, target, targetMask = NULL, initAffine = NULL, scope = c("affine","rigid","nonlinear"), estimateOnly = FALSE, ...)
+#' Two and three dimensional image registration
+#' 
+#' The \code{niftyreg} function performs linear or nonlinear registration for
+#' two and three dimensional images. 4D images may also be registered
+#' volumewise to a 3D image, or 3D images slicewise to a 2D image. This
+#' function is a common wrapper for \code{\link{niftyreg.linear}} and
+#' \code{\link{niftyreg.nonlinear}}.
+#' 
+#' @param source The source image, an object of class \code{"nifti"} or
+#'   \code{"internalImage"}, or a plain array, or a NIfTI-1 filename. Must have
+#'   2, 3 or 4 dimensions.
+#' @param target The target image, an object of class \code{"nifti"} or
+#'   \code{"internalImage"}, or a plain array, or a NIfTI-1 filename. Must have
+#'   2 or 3 dimensions.
+#' @param scope A string describing the scope, or number of degrees of freedom
+#'   (DOF), of the registration. The currently supported values are
+#'   \code{"affine"} (12 DOF), \code{"rigid"} (6 DOF) or \code{"nonlinear"}
+#'   (high DOF, with the exact number depending on the image sizes).
+#' @param init Transformation(s) to be used for initialisation, which may be
+#'   \code{NULL}, for no initialisation, or an affine matrix or control point
+#'   image (nonlinear only). For multiple registration, where the source image
+#'   has one more dimension than the target, this may also be a list whose
+#'   components are likewise \code{NULL} or a suitable initial transform.
+#' @param sourceMask An optional mask image in source space, whose nonzero
+#'   region will be taken as the region of interest for the registration.
+#'   Ignored when \code{symmetric} is \code{FALSE}.
+#' @param targetMask An optional mask image in target space, whose nonzero
+#'   region will be taken as the region of interest for the registration.
+#' @param symmetric Logical value. Should forward and reverse transformations
+#'   be estimated simultaneously?
+#' @param estimateOnly Logical value: if \code{TRUE}, transformations will be
+#'   estimated, but images will not be resampled.
+#' @param ... Further arguments to \code{\link{niftyreg.linear}} or
+#'   \code{\link{niftyreg.nonlinear}}.
+#' @param x A \code{"niftyreg"} object.
+#' @return A list of class \code{"niftyreg"} with components:
+#'   \item{image}{An array representing the registered and resampled
+#'     \code{source} image in the space of the \code{target} image. This
+#'     element is \code{NULL} if the \code{estimateOnly} parameter is
+#'     \code{TRUE}.}
+#'   \item{forwardTransforms}{A list of (linear or nonlinear) transformations
+#'     from source to target space.}
+#'   \item{reverseTransforms}{A list of (linear or nonlinear) transformations
+#'     from target to source space.}
+#'   \item{iterations}{A list of integer vectors, giving the number of
+#'     iterations completed at each ``level'' of the algorithm. Note that for
+#'     the first level of the linear algorithm specifically, twice the
+#'     specified number of iterations is allowed.}
+#'   \item{source}{An internal representation of the source image for each
+#'     registration.}
+#'   \item{target}{An internal representation of the target image.}
+#'   The \code{as.array} method for this class returns the \code{image}
+#'   element.
+#' 
+#' @note If substantial parts of the target image are zero-valued, for example
+#'   because the target image has been brain-extracted, it can be useful to
+#'   pass it as a target mask as well as the target image, viz.
+#'   \code{niftyreg(source, target, targetMask=target)}.
+#' 
+#' @examples
+#' \dontrun{
+#' source <- readNifti(system.file("extdata", "epi_t2.nii.gz",
+#'   package="RNiftyReg"))
+#' target <- readNifti(system.file("extdata", "flash_t1.nii.gz",
+#'   package="RNiftyReg"))
+#' 
+#' result <- niftyreg(source, target, scope="affine")
+#' }
+#' 
+#' @author Jon Clayden <code@@clayden.org>
+#' @seealso \code{\link{niftyreg.linear}} and \code{\link{niftyreg.nonlinear}},
+#'   which do most of the work. Also, \code{\link{forward}} and
+#'   \code{\link{reverse}} to extract transformations, and
+#'   \code{\link{applyTransform}} to apply them to new images or points.
+#' @references Please see \code{\link{niftyreg.linear}} or
+#' \code{\link{niftyreg.nonlinear}} for references relating to each type of
+#' registration.
+#' @export
+niftyreg <- function (source, target, scope = c("affine","rigid","nonlinear"), init = NULL, sourceMask = NULL, targetMask = NULL, symmetric = TRUE, estimateOnly = FALSE, ...)
 {
     if (missing(source) || missing(target))
-        report(OL$Error, "Source and target images must be given")
+        stop("Source and target images must be given")
     
     scope <- match.arg(scope)
     if (scope == "nonlinear")
-        niftyreg.nonlinear(source, target, targetMask, initAffine, estimateOnly=estimateOnly, ...)
+        niftyreg.nonlinear(source, target, init, sourceMask, targetMask, symmetric=symmetric, estimateOnly=estimateOnly, ...)
     else
-        niftyreg.linear(source, target, targetMask, initAffine, scope, estimateOnly=estimateOnly, ...)
+        niftyreg.linear(source, target, scope, init, sourceMask, targetMask, symmetric=symmetric, estimateOnly=estimateOnly, ...)
 }
 
-niftyreg.linear <- function (source, target, targetMask = NULL, initAffine = NULL, scope = c("affine","rigid"), nLevels = 3, maxIterations = 5, useBlockPercentage = 50, finalInterpolation = 3, verbose = FALSE, estimateOnly = FALSE)
+
+#' Two and three dimensional linear image registration
+#' 
+#' The \code{niftyreg.linear} function performs linear registration for two and
+#' three dimensional images. 4D images may also be registered volumewise to a
+#' 3D image, or 3D images slicewise to a 2D image. Rigid-body (6 degrees of
+#' freedom) and affine (12 degrees of freedom) registration can currently be
+#' performed.
+#' 
+#' This function performs the dual operations of finding a transformation to
+#' optimise image alignment, and resampling the source image into the space of
+#' the target image.
+#' 
+#' The algorithm is based on a block-matching approach and Least Trimmed
+#' Squares (LTS) fitting. Firstly, the block matching provides a set of
+#' corresponding points between a target and a source image. Secondly, using
+#' this set of corresponding points, the best rigid or affine transformation is
+#' evaluated. This two-step loop is repeated until convergence to the best
+#' transformation is achieved.
+#' 
+#' In the NiftyReg implementation, normalised cross-correlation between the
+#' target and source blocks is used to evaluate correspondence. The block width
+#' is constant and has been set to 4 voxels. A coarse-to-fine approach is used,
+#' where the registration is first performed on down-sampled images (using a
+#' Gaussian filter to resample images), and finally performed on full
+#' resolution images.
+#' 
+#' The source image may have 2, 3 or 4 dimensions, and the target 2 or 3. The
+#' dimensionality of the target image determines whether 2D or 3D registration
+#' is applied, and source images with one more dimension than the target (i.e.
+#' 4D to 3D, or 3D to 2D) will be registered volumewise or slicewise, as
+#' appropriate. In the latter case the last dimension of the resulting image is
+#' taken from the source image, while all other dimensions come from the
+#' target. One affine matrix is returned for each registration performed.
+#'
+#' @inheritParams niftyreg 
+#' @param nLevels A single integer specifying the number of levels of the
+#'   algorithm that should be applied. If zero, no optimisation will be
+#'   performed, and the final affine matrix will be the same as its
+#'   initialisation value.
+#' @param maxIterations A single integer specifying the maximum number of
+#'   iterations to be used within each level. Fewer iterations may be used if a
+#'   convergence test deems the process to have completed.
+#' @param useBlockPercentage A single integer giving the percentage of blocks
+#'   to use for calculating correspondence at each step of the algorithm. The
+#'   blocks with the highest intensity variance will be chosen.
+#' @param interpolation A single integer specifying the type of interpolation
+#'   to be applied to the final resampled image. May be 0 (nearest neighbour),
+#'   1 (trilinear) or 3 (cubic spline). No other values are valid.
+#' @param verbose A single logical value: if \code{TRUE}, the code will give
+#'   some feedback on its progress; otherwise, nothing will be output while the
+#'   algorithm runs. Run time can be seconds or more, depending on the size and
+#'   dimensionality of the images.
+#' @param sequentialInit If \code{TRUE} and \code{source} has higher
+#'   dimensionality than \code{target}, transformations which are not
+#'   explicitly initialised will begin from the result of the previous
+#'   registration.
+#' @return See \code{\link{niftyreg}}.
+#' 
+#' @author Jon Clayden <code@@clayden.org>
+#' @seealso \code{\link{niftyreg}}, which can be used as an interface to this
+#'   function, and \code{\link{niftyreg.nonlinear}} for nonlinear registration.
+#'   Also, \code{\link{forward}} and \code{\link{reverse}} to extract
+#'   transformations, and \code{\link{applyTransform}} to apply them to new
+#'   images or points.
+#' @references The algorithm used by this function is described in the
+#' following publication.
+#' 
+#' M. Modat, D.M. Cash, P. Daga, G.P. Winston, J.S. Duncan & S. Ourselin
+#' (2014). Global image registration using a symmetric block-matching approach.
+#' Journal of Medical Imaging 1(2):024003.
+#' @export
+niftyreg.linear <- function (source, target, scope = c("affine","rigid"), init = NULL, sourceMask = NULL, targetMask = NULL, symmetric = TRUE, nLevels = 3L, maxIterations = 5L, useBlockPercentage = 50L, interpolation = 3L, verbose = FALSE, estimateOnly = FALSE, sequentialInit = FALSE)
 {
     if (missing(source) || missing(target))
-        report(OL$Error, "Source and target images must be given")
-    else
-    {
-        source <- as(source, "nifti")
-        target <- as(target, "nifti")
-    }
-    if (!(source@dim_[1] %in% c(2,3,4)))
-        report(OL$Error, "Only 2D, 3D or 4D source images may be used")
-    if (!(target@dim_[1] %in% c(2,3)))
-        report(OL$Error, "Only 2D or 3D target images may be used")
-    if (source@dim_[1] == 4 && target@dim_[1] == 2)
-        report(OL$Error, "4D to 2D registration cannot be performed")
-    if (any(dim(source) < 4) || any(dim(target) < 4))
-        report(OL$Error, "Images of fewer than 4 voxels in any dimension cannot be registered")
-    if (!is.null(targetMask))
-        targetMask <- as(targetMask, "nifti")
-    if (any(sapply(list(nLevels,maxIterations,useBlockPercentage,finalInterpolation,verbose,estimateOnly), length) != 1))
-        report(OL$Error, "Control parameters must all be of unit length")
-    if (!(finalInterpolation %in% c(0,1,3)))
-        report(OL$Error, "Final interpolation specifier must be 0, 1 or 3")
+        stop("Source and target images must be given")
     
-    if (!is.list(initAffine))
-        initAffine <- list(initAffine)
-    if (!is.null(initAffine[[1]]))
-    {
-        if (!is.matrix(initAffine[[1]]) || !isTRUE(all.equal(dim(initAffine[[1]]), c(4,4))))
-            report(OL$Error, "Specified affine matrix is not valid")
-        else if (!is.null(attr(initAffine[[1]],"affineType")) && attr(initAffine[[1]],"affineType") != "niftyreg")
-            initAffine <- lapply(initAffine, convertAffine, source=source, target=target, newType="niftyreg")
-        
-        initAffine <- lapply(initAffine, as.vector, "numeric")
-    }
+    nSourceDim <- ndim(source)
+    nTargetDim <- ndim(target)
+    
+    if (!(interpolation %in% c(0,1,3)))
+        stop("Final interpolation specifier must be 0, 1 or 3")
     
     scope <- match.arg(scope)
+    nReps <- ifelse(nSourceDim > nTargetDim, dim(source)[nSourceDim], 1L)
     
-    if (source@dim_[1] == target@dim_[1])
+    if (!is.list(init))
+        init <- list(init)
+    if (length(init) != nReps)
     {
-        returnValue <- .Call("reg_aladin_R", .fixTypes(source), .fixTypes(target), scope, as.integer(nLevels), as.integer(maxIterations), as.integer(useBlockPercentage), as.integer(finalInterpolation), .fixTypes(targetMask), initAffine[[1]], as.integer(verbose), as.integer(estimateOnly), PACKAGE="RNiftyReg")
-        
-        if (estimateOnly)
-            resultImage <- NULL
+        if (sequentialInit)
+            init <- c(init, rep(list(NULL),nReps-length(init)))
         else
-        {
-            dim(returnValue[[1]]) <- dim(target)
-            resultImage <- as.nifti(returnValue[[1]], target)
-        }
-        
-        dim(returnValue[[2]]) <- c(4,4)
-        attr(returnValue[[2]], "affineType") <- "niftyreg"
-        affine <- list(returnValue[[2]])
-        
-        iterations <- list(returnValue[[3]])
+            init <- rep(init, length.out=nReps)
     }
-    else
-    {
-        nSourceDims <- source@dim_[1]
-        finalDims <- c(dim(target), dim(source)[nSourceDims])
-        nReps <- finalDims[length(finalDims)]
-        if (!estimateOnly)
-            finalArray <- array(0, dim=finalDims)
-        affine <- iterations <- vector("list", nReps)
-        
-        if (length(initAffine) == 1)
-            initAffine <- rep(initAffine, nReps)
-        else if (length(initAffine) != nReps)
-            report(OL$Error, "One initial affine matrix should be provided for each of the ", nReps, " registrations")
-        
-        for (i in seq_len(nReps))
-        {
-            if (nSourceDims == 3)
-            {
-                returnValue <- .Call("reg_aladin_R", .fixTypes(as.nifti(source[,,i],source)), .fixTypes(target), scope, as.integer(nLevels), as.integer(maxIterations), as.integer(useBlockPercentage), as.integer(finalInterpolation), .fixTypes(targetMask), initAffine[[i]], as.integer(verbose), as.integer(estimateOnly), PACKAGE="RNiftyReg")
-                
-                if (!estimateOnly)
-                    finalArray[,,i] <- returnValue[[1]]
-            }
-            else if (nSourceDims == 4)
-            {
-                returnValue <- .Call("reg_aladin_R", .fixTypes(as.nifti(source[,,,i],source)), .fixTypes(target), scope, as.integer(nLevels), as.integer(maxIterations), as.integer(useBlockPercentage), as.integer(finalInterpolation), .fixTypes(targetMask), initAffine[[i]], as.integer(verbose), as.integer(estimateOnly), PACKAGE="RNiftyReg")
-                
-                if (!estimateOnly)
-                    finalArray[,,,i] <- returnValue[[1]]
-            }
-            
-            dim(returnValue[[2]]) <- c(4,4)
-            attr(returnValue[[2]], "affineType") <- "niftyreg"
-            affine[[i]] <- returnValue[[2]]
-            iterations[[i]] <- returnValue[[3]]
-        }
-        
-        if (estimateOnly)
-            resultImage <- NULL
+    init <- lapply(init, function(x) {
+        if (!is.null(x) && !isAffine(x))
+            stop("Linear registration can only be initialised with an affine matrix")
         else
-        {
-            resultImage <- as.nifti(finalArray, target)
-            resultImage@dim_[nSourceDims+1] <- nReps
-        }
-    }
+            return (x)
+    })
     
-    resultImage <- .setImageMetadata(resultImage, source, finalInterpolation)
-    
-    result <- list(image=resultImage, affine=affine, control=NULL, reverseImage=NULL, reverseControl=NULL, iterations=iterations, scope=scope)
+    result <- .Call("regLinear", source, target, ifelse(scope=="affine",1L,0L), symmetric, nLevels, maxIterations, useBlockPercentage, interpolation, sourceMask, targetMask, init, verbose, estimateOnly, sequentialInit, PACKAGE="RNiftyReg")
     class(result) <- "niftyreg"
     
     return (result)
 }
 
-niftyreg.nonlinear <- function (source, target, targetMask = NULL, initAffine = NULL, initControl = NULL, symmetric = FALSE, sourceMask = NULL, nLevels = 3, maxIterations = 300, nBins = 64, bendingEnergyWeight = 0.005, jacobianWeight = 0, inverseConsistencyWeight = 0.01, finalSpacing = c(5,5,5), spacingUnit = c("vox","mm"), finalInterpolation = 3, verbose = FALSE, estimateOnly = FALSE)
+
+#' Two and three dimensional nonlinear image registration
+#' 
+#' The \code{niftyreg.nonlinear} function performs nonlinear registration for
+#' two and three dimensional images. 4D images may also be registered
+#' volumewise to a 3D image, or 3D images slicewise to a 2D image. The warping
+#' is based on free-form deformations, parameterised using an image of control
+#' points.
+#' 
+#' This function performs the dual operations of finding a transformation to
+#' optimise image alignment, and resampling the source image into the space of
+#' the target image (and vice-versa, if \code{symmetric} is \code{TRUE}).
+#' Unlike \code{\link{niftyreg.linear}}, this transformation is nonlinear, and
+#' the degree of deformation may vary across the image.
+#' 
+#' The nonlinear warping is based on free-form deformations. A lattice of
+#' equally-spaced control points is defined over the target image, each of
+#' which can be moved to locally modify the mapping to the source image. In
+#' order to assess the quality of the warping between the two images, an
+#' objective function based on the normalised mutual information is used, with
+#' penalty terms based on the bending energy or the squared log of the Jacobian
+#' determinant. The objective function value is optimised using a conjugate
+#' gradient scheme.
+#' 
+#' The source image may have 2, 3 or 4 dimensions, and the target 2 or 3. The
+#' dimensionality of the target image determines whether 2D or 3D registration
+#' is applied, and source images with one more dimension than the target (i.e.
+#' 4D to 3D, or 3D to 2D) will be registered volumewise or slicewise, as
+#' appropriate. In the latter case the last dimension of the resulting image is
+#' taken from the source image, while all other dimensions come from the
+#' target. One image of control points is returned for each registration
+#' performed.
+#'
+#' @inheritParams niftyreg 
+#' @param nLevels A single integer specifying the number of levels of the
+#'   algorithm that should be applied. If zero, no optimisation will be
+#'   performed, and the final control-point image will be the same as its
+#'   initialisation value.
+#' @param maxIterations A single integer specifying the maximum number of
+#'   iterations to be used within each level. Fewer iterations may be used if a
+#'   convergence test deems the process to have completed.
+#' @param nBins A single integer giving the number of bins to use for the joint
+#'   histogram created by the algorithm.
+#' @param bendingEnergyWeight A numeric value giving the weight of the bending
+#'   energy term in the cost function.
+#' @param linearEnergyWeight A numeric value giving the weight of the linear
+#'   energy term in the cost function.
+#' @param jacobianWeight A numeric value giving the weight of the Jacobian
+#'   determinant term in the cost function.
+#' @param finalSpacing A numeric vector giving the spacing of control points in
+#'   the final grid, along the X, Y and Z directions respectively. This is set
+#'   from the initial control point image, if one is supplied.
+#' @param spacingUnit A character string giving the units in which the
+#'   \code{finalSpacing} is specified: either \code{"voxel"} for pixels/voxels,
+#'   or \code{"world"} for real-world units (see \code{\link{pixunits}}).
+#' @param interpolation A single integer specifying the type of interpolation
+#'   to be applied to the final resampled image. May be 0 (nearest neighbour),
+#'   1 (trilinear) or 3 (cubic spline). No other values are valid.
+#' @param verbose A single logical value: if \code{TRUE}, the code will give
+#'   some feedback on its progress; otherwise, nothing will be output while the
+#'   algorithm runs. Run time can be seconds or more, depending on the size and
+#'   dimensionality of the images.
+#' @param sequentialInit If \code{TRUE} and \code{source} has higher
+#'   dimensionality than \code{target}, transformations which are not
+#'   explicitly initialised will begin from the result of the previous
+#'   registration.
+#' @return See \code{\link{niftyreg}}.
+#' 
+#' @note Performing a linear registration first, and then initialising the
+#'   nonlinear transformation with the result (via the \code{init} parameter),
+#'   is highly recommended in most circumstances.
+#' @author Jon Clayden <code@@clayden.org>
+#' @seealso \code{\link{niftyreg}}, which can be used as an interface to this
+#'   function, and \code{\link{niftyreg.linear}} for linear registration. Also,
+#'   \code{\link{forward}} and \code{\link{reverse}} to extract
+#'   transformations, and \code{\link{applyTransform}} to apply them to new
+#'   images or points.
+#' @references The algorithm used by this function is described in the
+#' following publication.
+#' 
+#' M. Modat, G.R. Ridgway, Z.A. Taylor, M. Lehmann, J. Barnes, D.J. Hawkes,
+#' N.C. Fox & S. Ourselin (2010). Fast free-form deformation using graphics
+#' processing units. Computer Methods and Programs in Biomedicine
+#' 98(3):278-284.
+#' @export
+niftyreg.nonlinear <- function (source, target, init = NULL, sourceMask = NULL, targetMask = NULL, symmetric = TRUE, nLevels = 3L, maxIterations = 150L, nBins = 64L, bendingEnergyWeight = 0.001, linearEnergyWeight = 0.01, jacobianWeight = 0, finalSpacing = c(5,5,5), spacingUnit = c("voxel","world"), interpolation = 3L, verbose = FALSE, estimateOnly = FALSE, sequentialInit = FALSE)
 {
     if (missing(source) || missing(target))
-        report(OL$Error, "Source and target images must be given")
-    else
-    {
-        source <- as(source, "nifti")
-        target <- as(target, "nifti")
-    }
-    if (!(source@dim_[1] %in% c(2,3,4)))
-        report(OL$Error, "Only 2D, 3D or 4D source images may be used")
-    if (!(target@dim_[1] %in% c(2,3)))
-        report(OL$Error, "Only 2D or 3D target images may be used")
-    if (source@dim_[1] == 4 && target@dim_[1] == 2)
-        report(OL$Error, "4D to 2D registration cannot be performed")
-    if (symmetric && source@dim_[1] != target@dim_[1])
-        report(OL$Error, "Source and target images must have the same dimensionality for symmetric registration")
-    if (symmetric && !is.null(initControl))
-        report(OL$Error, "The symmetric algorithm does not currently use an initial control point image")
-    if (!is.null(targetMask))
-        targetMask <- as(targetMask, "nifti")
-    if (!is.null(sourceMask))
-        sourceMask <- as(sourceMask, "nifti")
-    if (any(sapply(list(symmetric,nLevels,maxIterations,nBins,bendingEnergyWeight,jacobianWeight,inverseConsistencyWeight,finalInterpolation,verbose,estimateOnly), length) != 1))
-        report(OL$Error, "Control parameters must all be of unit length")
-    if (any(c(bendingEnergyWeight,jacobianWeight,inverseConsistencyWeight) < 0))
-        report(OL$Error, "Penalty term weights must be nonnegative")
+        stop("Source and target images must be given")
+    
+    nSourceDim <- ndim(source)
+    nTargetDim <- ndim(target)
+    
+    if (any(c(bendingEnergyWeight,jacobianWeight) < 0))
+        stop("Penalty term weights must be nonnegative")
     if (bendingEnergyWeight + jacobianWeight > 1)
-        report(OL$Error, "Penalty term weights cannot add up to more than 1")
-    if (!(finalInterpolation %in% c(0,1,3)))
-        report(OL$Error, "Final interpolation specifier must be 0, 1 or 3")
+        stop("Penalty term weights cannot add up to more than 1")
+    if (!(interpolation %in% c(0,1,3)))
+        stop("Final interpolation specifier must be 0, 1 or 3")
     
     if (nLevels == 0)
         symmetric <- FALSE
     
-    # This takes priority over any affine initialisation, if present
-    if (!is.list(initControl))
-        initControl <- list(initControl)
-    if (!is.null(initControl[[1]]))
-    {
-        initControl <- lapply(initControl, function(x) .fixTypes(as(x,"nifti")))
-        finalSpacing <- initControl[[1]]@pixdim[2:4] / 2^max(0,nLevels-1)
-        spacingUnit <- "mm"
-        initAffine <- NULL
-    }
-    
-    if (!is.list(initAffine))
-        initAffine <- list(initAffine)
-    if (!is.null(initAffine[[1]]))
-    {
-        if (!is.matrix(initAffine[[1]]) || !isTRUE(all.equal(dim(initAffine[[1]]), c(4,4))))
-            report(OL$Error, "Specified affine matrix is not valid")
-        else if (!is.null(attr(initAffine[[1]],"affineType")) && attr(initAffine[[1]],"affineType") != "niftyreg")
-            initAffine <- lapply(initAffine, convertAffine, source=source, target=target, newType="niftyreg")
-        
-        initAffine <- lapply(initAffine, as.vector, "numeric")
-    }
-    
+    nReps <- ifelse(nSourceDim > nTargetDim, dim(source)[nSourceDim], 1L)
     spacingUnit <- match.arg(spacingUnit)
-    if (spacingUnit == "vox")
-        finalSpacing <- finalSpacing * abs(target@pixdim[2:4])
+    spacingChanged <- FALSE
     
-    if (target@dim_[1] == 2)
+    if (!is.list(init))
+        init <- list(init)
+    if (length(init) != nReps)
     {
+        if (sequentialInit)
+            init <- c(init, rep(list(NULL),nReps-length(init)))
+        else
+            init <- rep(init, length.out=nReps)
+    }
+    init <- lapply(init, function(x) {
+        if (is.null(x))
+            return (x)
+        else if (!is.null(attr(x, ".nifti_image_ptr")))
+        {
+            currentSpacing <- pixdim(x)[1:3] / 2^max(0,nLevels-1)
+            if (spacingChanged && !isTRUE(all.equal(currentSpacing, finalSpacing)))
+                stop("Initial control point images must all use the same grid")
+            finalSpacing <<- currentSpacing
+            spacingUnit <<- "mm"
+            spacingChanged <<- TRUE
+            return (x)
+        }
+        else if (!isAffine(x))
+            stop("Initial transform should be a control point image or affine matrix")
+        else
+            return (x)
+    })
+    
+    if (spacingUnit == "voxel")
+    {
+        indices <- 1:min(3,nTargetDim)
+        finalSpacing[indices] <- finalSpacing[indices] * abs(pixdim(target)[indices])
+    }
+    
+    if (nTargetDim == 2)
         finalSpacing <- c(finalSpacing[1:2], 1)
-        controlPointDims <- floor(abs(target@dim_[2:3] * target@pixdim[2:3] / finalSpacing[1:2])) + 5
-        controlPointDims <- c(controlPointDims, 1, 1, 2)
-        if (symmetric)
-        {
-            reverseControlPointDims <- floor(abs(source@dim_[2:3] * source@pixdim[2:3] / finalSpacing[1:2])) + 5
-            reverseControlPointDims <- c(reverseControlPointDims, 1, 1, 2)
-        }
-    }
     else
-    {
         finalSpacing <- finalSpacing[1:3]
-        controlPointDims <- floor(abs(target@dim_[2:4] * target@pixdim[2:4] / finalSpacing)) + 5
-        controlPointDims <- c(controlPointDims, 1, 3)
-        if (symmetric)
-        {
-            reverseControlPointDims <- floor(abs(source@dim_[2:4] * source@pixdim[2:4] / finalSpacing)) + 5
-            reverseControlPointDims <- c(reverseControlPointDims, 1, 3)
-        }
-    }
     
-    reverseImage <- reverseControl <- NULL
-    if (!symmetric)
-        sourceMask <- NULL
-    
-    if (source@dim_[1] == target@dim_[1])
-    {
-        returnValue <- .Call("reg_f3d_R", .fixTypes(source), .fixTypes(target), as.integer(nLevels), as.integer(maxIterations), as.integer(nBins), as.numeric(bendingEnergyWeight), as.numeric(jacobianWeight), as.numeric(inverseConsistencyWeight), as.numeric(abs(finalSpacing)), as.integer(finalInterpolation), .fixTypes(targetMask), .fixTypes(sourceMask), initAffine[[1]], initControl[[1]], as.integer(symmetric), as.integer(verbose), as.integer(estimateOnly), PACKAGE="RNiftyReg")
-        
-        if (estimateOnly)
-            resultImage <- NULL
-        else
-        {
-            dim(returnValue[[1]]) <- dim(target)
-            resultImage <- as.nifti(returnValue[[1]], target)
-        }
-        
-        if (symmetric)
-        {
-            if (estimateOnly)
-                reverseImage <- NULL
-            else
-            {
-                dim(returnValue[[5]]) <- dim(source)
-                reverseImage <- as.nifti(returnValue[[5]], source)
-            }
-            
-            dim(returnValue[[8]]) <- c(4,4)
-            dim(returnValue[[2]]) <- c(prod(controlPointDims[1:4]), controlPointDims[5])
-            for (i in controlPointDims[5]:3)
-                returnValue[[2]] <- cbind(returnValue[[2]], 1)
-            returnValue[[2]] <- t((returnValue[[8]] %*% t(returnValue[[2]]))[1:controlPointDims[5],])
-            
-            reverseControl <- list(.createControlPointImage(returnValue[[6]], reverseControlPointDims, finalSpacing, returnValue[[7]]))
-        }
-        
-        control <- list(.createControlPointImage(returnValue[[2]], controlPointDims, finalSpacing, returnValue[[3]]))
-        iterations <- list(returnValue[[4]])
-    }
-    else
-    {
-        nSourceDims <- source@dim_[1]
-        finalDims <- c(dim(target), dim(source)[nSourceDims])
-        nReps <- finalDims[length(finalDims)]
-        if (!estimateOnly)
-            finalArray <- array(0, dim=finalDims)
-        control <- iterations <- vector("list", nReps)
-        
-        if (length(initControl) == 1)
-            initControl <- rep(initControl, nReps)
-        else if (length(initControl) != nReps)
-            report(OL$Error, "One initial control point image should be provided for each of the ", nReps, " registrations")
-        
-        if (length(initAffine) == 1)
-            initAffine <- rep(initAffine, nReps)
-        else if (length(initAffine) != nReps)
-            report(OL$Error, "One initial affine matrix should be provided for each of the ", nReps, " registrations")
-
-        for (i in seq_len(nReps))
-        {
-            if (nSourceDims == 3)
-            {
-                returnValue <- .Call("reg_f3d_R", .fixTypes(as.nifti(source[,,i],source)), .fixTypes(target), as.integer(nLevels), as.integer(maxIterations), as.integer(nBins), as.numeric(bendingEnergyWeight), as.numeric(jacobianWeight), as.numeric(inverseConsistencyWeight), as.numeric(abs(finalSpacing)), as.integer(finalInterpolation), .fixTypes(targetMask), .fixTypes(sourceMask), initAffine[[i]], initControl[[i]], as.integer(symmetric), as.integer(verbose), as.integer(estimateOnly), PACKAGE="RNiftyReg")
-                
-                if (!estimateOnly)
-                    finalArray[,,i] <- returnValue[[1]]
-            }
-            else if (nSourceDims == 4)
-            {
-                returnValue <- .Call("reg_f3d_R", .fixTypes(as.nifti(source[,,,i],source)), .fixTypes(target), as.integer(nLevels), as.integer(maxIterations), as.integer(nBins), as.numeric(bendingEnergyWeight), as.numeric(jacobianWeight), as.numeric(inverseConsistencyWeight), as.numeric(abs(finalSpacing)), as.integer(finalInterpolation), .fixTypes(targetMask), .fixTypes(sourceMask), initAffine[[i]], initControl[[i]], as.integer(symmetric), as.integer(verbose), as.integer(estimateOnly), PACKAGE="RNiftyReg")
-                
-                if (!estimateOnly)
-                    finalArray[,,,i] <- returnValue[[1]]
-            }
-            
-            control[[i]] <- .createControlPointImage(returnValue[[2]], controlPointDims, finalSpacing, returnValue[[3]])
-            iterations[[i]] <- returnValue[[4]]
-        }
-        
-        if (estimateOnly)
-            resultImage <- NULL
-        else
-        {
-            resultImage <- as.nifti(finalArray, target)
-            resultImage@dim_[nSourceDims+1] <- nReps
-        }
-    }
-    
-    resultImage <- .setImageMetadata(resultImage, source, finalInterpolation)
-    if (symmetric)
-        reverseImage <- .setImageMetadata(reverseImage, target, finalInterpolation)
-    
-    result <- list(image=resultImage, affine=NULL, control=control, reverseImage=reverseImage, reverseControl=reverseControl, iterations=iterations, scope="nonlinear")
+    result <- .Call("regNonlinear", source, target, symmetric, nLevels, maxIterations, interpolation, sourceMask, targetMask, init, nBins, finalSpacing, bendingEnergyWeight, linearEnergyWeight, jacobianWeight, verbose, estimateOnly, sequentialInit, PACKAGE="RNiftyReg")
     class(result) <- "niftyreg"
     
     return (result)
 }
 
-applyAffine <- function (affine, source, target, affineType = NULL, finalInterpolation = 3)
+
+#' @rdname niftyreg
+#' @export
+as.array.niftyreg <- function (x, ...)
 {
-    if (!is.matrix(affine) || !isTRUE(all.equal(dim(affine), c(4,4))))
-        report(OL$Error, "Specified affine matrix is not valid")
-    
-    if (is.null(affineType))
+    as.array(x$image)
+}
+
+
+#' Extract forward and reverse transformations
+#' 
+#' These functions extract forward and reverse transformations in a form
+#' compatible with \code{\link{applyTransform}} and other functions. They are
+#' (S3) generic, but only methods for \code{"niftyreg"} objects currently
+#' exist.
+#' 
+#' @param object An R object.
+#' @param i The transformation number to extract. There will only be more than
+#'   one in the case of multiple registration.
+#' @param ... Additional arguments. Not currently used.
+#' @return A transformation object, an image or affine matrix, with suitable
+#'   attributes giving pointers to source and target images. If there is no
+#'   transformation information in the object then \code{NULL} is returned.
+#' 
+#' @author Jon Clayden <code@@clayden.org>
+#' @seealso \code{\link{niftyreg}}, \code{\link{applyTransform}}
+#' @export
+forward <- function (object, ...)
+{
+    UseMethod("forward")
+}
+
+
+#' @rdname forward
+#' @export
+forward.niftyreg <- function (object, i = 1, ...)
+{
+    if (is.null(object$forwardTransforms))
+        return (NULL)
+    else
     {
-        affineType <- attr(affine, "affineType")
-        if (is.null(affineType))
-            report(OL$Error, "The current affine type was not specified and is not stored with the matrix")
+        result <- object$forwardTransforms[[i]]
+        attr(result, "source") <- object$source[[i]]
+        attr(result, "target") <- object$target
+        return (result)
     }
-    else
-        attr(affine, "affineType") <- affineType
-    
-    return (niftyreg.linear(source, target, targetMask=NULL, initAffine=affine, scope="affine", nLevels=0, finalInterpolation=finalInterpolation, verbose=FALSE, estimateOnly=FALSE))
 }
 
-applyControlPoints <- function (controlPointImage, source, target, finalInterpolation = 3)
+
+#' @rdname forward
+#' @export
+reverse <- function (object, ...)
 {
-    return (niftyreg.nonlinear(source, target, targetMask=NULL, initControl=controlPointImage, symmetric=FALSE, nLevels=0, finalInterpolation=finalInterpolation, verbose=FALSE, estimateOnly=FALSE))
+    UseMethod("reverse")
 }
 
-getDeformationField <- function (target, affine = NULL, controlPointImage = NULL, jacobian = TRUE)
+
+#' @rdname forward
+#' @export
+reverse.niftyreg <- function (object, i = 1, ...)
 {
-    if (missing(target))
-        report(OL$Error, "Target image must be given")
+    if (is.null(object$reverseTransforms))
+        return (NULL)
     else
-        target <- as(target, "nifti")
-    if (is.null(affine) && is.null(controlPointImage))
-        report(OL$Error, "Affine matrix or control point image must be specified")
-    if (!is.null(controlPointImage))
-        controlPointImage <- as(controlPointImage, "nifti")
-    
-    returnValue <- .Call("get_deformation_field_R", affine, .fixTypes(controlPointImage), .fixTypes(target), jacobian, PACKAGE="RNiftyReg")
-    
-    nDims <- target@dim_[1]
-    dimIndex <- 1 + seq_len(nDims)
-    padding <- rep(1, 4-nDims)
-    
-    result <- list(deformationField=.createControlPointImage(returnValue[[1]], c(target@dim_[dimIndex],padding,nDims), c(target@pixdim[dimIndex],padding,1), returnValue[[2]]))
-    if (jacobian)
-        result$jacobian <- .createControlPointImage(returnValue[[3]], target@dim_[dimIndex], target@pixdim[dimIndex], returnValue[[4]])
-    
-    return (result)
+    {
+        result <- object$reverseTransforms[[i]]
+        attr(result, "source") <- object$target
+        attr(result, "target") <- object$source[[i]]
+        return (result)
+    }
 }

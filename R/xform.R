@@ -1,38 +1,82 @@
-xformToAffine <- function (image, useQuaternionFirst = TRUE)
+#' Obtain an affine matrix corresponding to the ``xform'' of an image
+#' 
+#' This function converts the ``qform'' or ``sform'' information in a NIfTI
+#' header into its corresponding affine matrix. These two ``xform'' mechanisms
+#' are defined by the NIfTI standard and may both be in use in a particular
+#' image header.
+#' 
+#' @param image An image, in any acceptable form (see \code{\link{isImage}}).
+#' @param useQuaternionFirst A single logical value. If \code{TRUE}, the
+#'   ``qform'' matrix will be used first, if it is defined; otherwise the
+#'   ``sform'' matrix will take priority.
+#' @return A affine matrix corresponding to the ``qform'' or ``sform''
+#'   information in the image header. This is a plain matrix, which does not
+#'   have the \code{"affine"} class or \code{source} and \code{target}
+#'   attributes.
+#' 
+#' @author Jon Clayden <code@@clayden.org>
+#' @references The NIfTI-1 standard (\url{http://nifti.nimh.nih.gov/nifti-1})
+#'   is the definitive reference on ``xform'' conventions.
+#' @export
+xform <- function (image, useQuaternionFirst = TRUE)
 {
-    image <- as(image, "nifti")
-    
-    # With no information, assume RAS orientation and zero origin
-    if (image@qform_code <= 0 && image@sform_code <= 0)
-        matrix <- diag(c(1, 1, 1, 1))
-    else if ((useQuaternionFirst && image@qform_code > 0) || image@sform_code <= 0)
+    return (.Call("getXform", image, isTRUE(useQuaternionFirst), PACKAGE="RNiftyReg"))
+}
+
+
+#' Transform points between voxel and ``world'' coordinates
+#' 
+#' These functions are used to transform points from dimensionless pixel or
+#' voxel coordinates to ``real-world'' coordinates, typically in millimetres,
+#' and back. Actual pixel units can be obtained using the
+#' \code{\link{pixunits}} function.
+#' 
+#' @param points A vector giving the coordinates of a point, or a matrix with
+#'   one point per row.
+#' @param image The image in whose space the points are given.
+#' @param simple A logical value: if \code{TRUE} then the transformation is
+#'   performed simply by rescaling the points according to the voxel dimensions
+#'   recorded in the \code{image}. Otherwise the full xform matrix is used.
+#' @param ... Additional arguments to \code{\link{xform}}.
+#' @return A vector or matrix of transformed points.
+#' 
+#' @note Voxel coordinates are assumed by these functions to use R's indexing
+#'   convention, beginning from 1.
+#' 
+#' @author Jon Clayden <code@@clayden.org>
+#' @seealso \code{\link{xform}}, \code{\link{pixdim}}, \code{\link{pixunits}}
+#' @export
+voxelToWorld <- function (points, image, simple = FALSE, ...)
+{
+    if (simple)
     {
-        matrix <- diag(4)
-        matrix[1:3,4] <- c(image@qoffset_x, image@qoffset_y, image@qoffset_z)
-        q <- c(image@quatern_b, image@quatern_c, image@quatern_d)
-        
-        if (sum(q^2) == 1)
-            q <- c(0, q)
-        else
-            q <- c(sqrt(1 - sum(q^2)), q)
-        
-        matrix[1:3,1:3] <- c(q[1]*q[1] + q[2]*q[2] - q[3]*q[3] - q[4]*q[4],
-                             2*q[2]*q[3] + 2*q[1]*q[4],
-                             2*q[2]*q[4] - 2*q[1]*q[3],
-                             2*q[2]*q[3] - 2*q[1]*q[4],
-                             q[1]*q[1] + q[3]*q[3] - q[2]*q[2] - q[4]*q[4],
-                             2*q[3]*q[4] + 2*q[1]*q[2],
-                             2*q[2]*q[4] + 2*q[1]*q[3],
-                             2*q[3]*q[4] - 2*q[1]*q[2],
-                             q[1]*q[1] + q[4]*q[4] - q[3]*q[3] - q[2]*q[2])
-        
-        # The qfactor should be stored as 1 or -1, but the NIfTI standard says 0
-        # should be treated as 1: this formulation does that (the 0.1 is arbitrary)
-        qfactor <- sign(image@pixdim[1] + 0.1)
-        matrix[1:3,1:3] <- matrix[1:3,1:3] * rep(c(abs(image@pixdim[2:3]), qfactor*abs(image@pixdim[4])), each=3)
+        if (!is.matrix(points))
+            points <- matrix(points, nrow=1)
+        voxelDims <- pixdim(image)[seq_len(ncol(points))]
+        return (drop(t(apply(points-1, 1, function(x) x*abs(voxelDims)))))
     }
     else
-        matrix <- rbind(image@srow_x, image@srow_y, image@srow_z, c(0,0,0,1))
-    
-    return (matrix)
+    {
+        affine <- xform(image, ...)
+        return (applyAffine(affine, points-1))
+    }
+}
+
+
+#' @rdname voxelToWorld
+#' @export
+worldToVoxel <- function (points, image, simple = FALSE, ...)
+{
+    if (simple)
+    {
+        if (!is.matrix(points))
+            points <- matrix(points, nrow=1)
+        voxelDims <- pixdim(image)[seq_len(ncol(points))]
+        return (drop(t(apply(points, 1, function(x) x/abs(voxelDims)) + 1)))
+    }
+    else
+    {
+        affine <- solve(xform(image, ...))
+        return (applyAffine(affine, points) + 1)
+    }
 }
