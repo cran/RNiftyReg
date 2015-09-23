@@ -1,6 +1,6 @@
-d54ff02031c2b1e6e78824770a865001 *DESCRIPTION
+dc53fbda05b169d9ac30b3529c42c145 *DESCRIPTION
 18122dedbd9ea1cd5f7f598b82d2a1e7 *NAMESPACE
-94f32fafdbfd11b6436f14bf0ca11138 *NEWS
+8b808aad4d3a9a5529f0f270ec8ecbf5 *NEWS
 a2b04ba284295b2966203015475dd8a0 *R/affine.R
 a546772dbae28308b54e6629bc5aac7f *R/image.R
 657d7b6776c6dfc392a27f1b3d2fdc00 *R/nifti.R
@@ -72,10 +72,10 @@ f814132f06179a8134dc3722dfd37091 *src/reg-lib/OptimiseKernel.h
 e1a23d84b09bb76abc9c2702a2c8dcc2 *src/reg-lib/Platform.h
 19e9a4c8a2b0713f48e590fb4478bdad *src/reg-lib/ResampleImageKernel.h
 91c7c4892839127746e5997c3fa34b2c *src/reg-lib/_reg_aladin.cpp
-9cb81d4318cea484dc1c149747acc4c4 *src/reg-lib/_reg_aladin.h
+eab6939ce22a1d47a6d4ce153105da8e *src/reg-lib/_reg_aladin.h
 e8c779e275c5d6340eb6f94b746fc302 *src/reg-lib/_reg_aladin_sym.cpp
 f040675b0dc6fa75d8ac09a682e4a331 *src/reg-lib/_reg_aladin_sym.h
-947a716bf34c45e4e56521a9194e3d8b *src/reg-lib/_reg_base.cpp
+b0dbb8c05cebf34add06b0236546aed1 *src/reg-lib/_reg_base.cpp
 a3a5b2b20528a6bf98e64c0f6cced2b7 *src/reg-lib/_reg_base.h
 ff33fbd407ea3ed02db1ffd3f0851d09 *src/reg-lib/_reg_f3d.cpp
 85285a4bcad458246965b78d541ccfe6 *src/reg-lib/_reg_f3d.h
@@ -101,7 +101,7 @@ a16b37fbd50fa7f711b449f6fb281444 *src/reg-lib/cpu/CPUKernels.cpp
 15d80318fa0ea75222d454c27ff6cb32 *src/reg-lib/cpu/CPUResampleImageKernel.h
 7649e0a8732b69c60848f074bcac0b14 *src/reg-lib/cpu/_reg_KLdivergence.cpp
 6ccc8a7d3ac3bf75ba7b35cc533d4a9e *src/reg-lib/cpu/_reg_KLdivergence.h
-8968b42802fb486247258009a2bf3a9b *src/reg-lib/cpu/_reg_blockMatching.cpp
+1301762092a44d208efed7d361284cdd *src/reg-lib/cpu/_reg_blockMatching.cpp
 62df4f9702a95622dde9750b314c8175 *src/reg-lib/cpu/_reg_blockMatching.h
 d5cc60477717bf39d6d97a36eb6aad65 *src/reg-lib/cpu/_reg_dti.cpp
 0145c06648c63acba321215f62990506 *src/reg-lib/cpu/_reg_dti.h
@@ -109,7 +109,7 @@ f7a9e0c25738f6953f5abee03eeedc3c *src/reg-lib/cpu/_reg_femTrans.cpp
 8e9b4c38655df945cc7790afc7fd44a8 *src/reg-lib/cpu/_reg_femTrans.h
 cee54ad2d62fa6bfe5e1df5a521f7947 *src/reg-lib/cpu/_reg_globalTrans.cpp
 48ccdcefd7f385b52387b84fa0867f50 *src/reg-lib/cpu/_reg_globalTrans.h
-0a4fd29592c55bed93510cdb0cfa5920 *src/reg-lib/cpu/_reg_lncc.cpp
+015a17766a193446fae6d4e47693ee68 *src/reg-lib/cpu/_reg_lncc.cpp
 f5be1f2f966920aee0c78b860fd1ae48 *src/reg-lib/cpu/_reg_lncc.h
 bc70baa37c6ec036f9d6c8414ee992dc *src/reg-lib/cpu/_reg_localTrans.cpp
 4a6ab1b32b5dba49945c98d2007ee888 *src/reg-lib/cpu/_reg_localTrans.h
@@ -125,7 +125,7 @@ c3bb37b5c47bb2bd039a2a06a1761a74 *src/reg-lib/cpu/_reg_localTrans_regularisation
 52274899d2d2587e947d09cb71f7d32a *src/reg-lib/cpu/_reg_optimiser.h
 5e44f8efe04f5c424917c196ec10fbc2 *src/reg-lib/cpu/_reg_polyAffine.cpp
 3112142d5cc5ef897202333f6b637f5b *src/reg-lib/cpu/_reg_polyAffine.h
-88e4ef103d632c18a660fd04be7eb3dd *src/reg-lib/cpu/_reg_resampling.cpp
+ab8867ac81fb67c216fd176a8d38f48f *src/reg-lib/cpu/_reg_resampling.cpp
 aef6023e6a92f433ed84c0ad38067e14 *src/reg-lib/cpu/_reg_resampling.h
 a1eddf88b1cd338baded4ec63d68e171 *src/reg-lib/cpu/_reg_ssd.cpp
 fa55e5d99a6af464312c914c99d908fa *src/reg-lib/cpu/_reg_ssd.h
