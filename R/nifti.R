@@ -77,7 +77,9 @@ writeNifti <- function (image, file, template = NULL, datatype = "auto")
 #' 
 #' @param image A numeric array.
 #' @param template An image, in any acceptable form (see
-#'   \code{\link{isImage}}). The default of \code{NULL} will have no effect.
+#'   \code{\link{isImage}}), or a named list of NIfTI-1 properties like that
+#'   produced by \code{\link{dumpNifti}}. The default of \code{NULL} will have
+#'   no effect.
 #' @return A copy of the original \code{image}, with its internal image
 #'   attribute set or updated appropriately.
 #' 
@@ -95,8 +97,10 @@ updateNifti <- function (image, template = NULL)
 #' list. No processing is done to the elements.
 #' 
 #' @param image An image, in any acceptable form (see \code{\link{isImage}}).
-#' @return A list with named components corresponding to the elements in a raw
-#'   NIfTI-1 file.
+#' @param x A \code{"niftiHeader"} object.
+#' @param ... Ignored.
+#' @return For \code{dumpNifti}, a list of class \code{"niftiHeader"}, with
+#'   named components corresponding to the elements in a raw NIfTI-1 file.
 #' 
 #' @author Jon Clayden <code@@clayden.org>
 #' @references The NIfTI-1 standard (\url{http://nifti.nimh.nih.gov/nifti-1}).
@@ -104,4 +108,16 @@ updateNifti <- function (image, template = NULL)
 dumpNifti <- function (image)
 {
     .Call("dumpNifti", image, PACKAGE="RNiftyReg")
+}
+
+#' @rdname dumpNifti
+#' @export
+print.niftiHeader <- function (x, ...)
+{
+    cat("NIfTI-1 header\n")
+    widths <- nchar(names(x), "width")
+    maxWidth <- max(widths)
+    
+    for (i in seq_along(widths))
+        cat(paste0(paste(rep(" ",maxWidth-widths[i]),collapse=""), names(x)[i], ": ", paste(format(x[[i]],trim=TRUE),collapse="  "), "\n"))
 }

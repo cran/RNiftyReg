@@ -1,15 +1,21 @@
-#' Check whether an object is an affine matrix
+#' Create, test for and print affine matrices
 #' 
-#' This function returns a logical value indicating whether its argument is, or
-#' resembles a 4x4 affine matrix. Affine transformations are a class of linear
-#' transformations which preserve points, straight lines and planes, and may
-#' consist of a combination of rotation, translation, scale and skew
-#' operations.
+#' \code{isAffine} returns a logical value indicating whether its argument is,
+#' or resembles, a 4x4 affine matrix. \code{asAffine} converts a suitable
+#' matrix to the affine class, attaching the source and target images as
+#' attributes. Affine transformations are a class of linear transformations
+#' which preserve points, straight lines and planes, and may consist of a
+#' combination of rotation, translation, scale and skew operations.
 #' 
-#' @param object Any R object.
+#' NiftyReg's convention is for affine matrices to transform world coordinates
+#' (in the sense of \code{voxelToWorld}) from TARGET to SOURCE space, although
+#' transforms are logically applied the other way.
+#' 
+#' @param object An R object.
 #' @param strict If \code{TRUE}, this function just tests whether the object is
 #'   of class \code{"affine"}. Otherwise it also tests for an affine-like 4x4
 #'   matrix.
+#' @param source,target Source and target images for the transformation.
 #' @param x An \code{"affine"} object.
 #' @param ... Additional parameters to methods. Currently unused.
 #' @return A logical value, which is \code{TRUE} if \code{object} appears to be
@@ -32,9 +38,25 @@ isAffine <- function (object, strict = FALSE)
 }
 
 
+#' @rdname affine
+#' @export
 asAffine <- function (object, source = NULL, target = NULL)
 {
+    if ("affine" %in% class(object) && is.null(source) && is.null(target))
+        return (object)
+    else
+        object <- as.matrix(object)
     
+    if (!isTRUE(all.equal(dim(object), c(4,4))))
+        stop("Affine matrix should be 4x4")
+    
+    object <- structure(object, source=source, target=target, class="affine")
+    if (!is.null(source) && !("niftiImage" %in% class(source)))
+        attr(object,"source") <- .Call("retrieveImage", attr(object,"source"), PACKAGE="RNiftyReg")
+    if (!is.null(target) && !("niftiImage" %in% class(target)))
+        attr(object,"target") <- .Call("retrieveImage", attr(object,"target"), PACKAGE="RNiftyReg")
+    
+    return (object)
 }
 
 
@@ -115,36 +137,37 @@ readAffine <- function (fileName, source = NULL, target = NULL, type = NULL)
     if (!isTRUE(all.equal(dim(affine), c(4,4))))
         stop("The specified file does not contain a 4x4 affine matrix")
     
-    source <- .Call("retrieveImage", source, PACKAGE="RNiftyReg")
-    target <- .Call("retrieveImage", target, PACKAGE="RNiftyReg")
-    
+    affine <- asAffine(affine, source, target)
     if (type != "niftyreg")
-        return (convertAffine(affine, source, target, "niftyreg"))
-    else
-        return (structure(affine, class="affine", source=source, target=target))
+        affine <- convertAffine(affine, source, target, "niftyreg")
+    
+    return (affine)
 }
 
 
 #' Write an affine matrix to a file
 #' 
 #' This function is used to write a 4x4 numeric matrix representing an affine
-#' transformation to a file. A comment is also written which specifies the
-#' matrix as using the NiftyReg convention, for the benefit of
+#' transformation to a file. A comment is also (optionally) written, which
+#' specifies the matrix as using the NiftyReg convention, for the benefit of
 #' \code{\link{readAffine}}.
 #' 
 #' @param affine A 4x4 affine matrix.
 #' @param fileName A string giving the file name to write the matrix to.
+#' @param comments Logical value: if \code{TRUE} comments are written to the
+#'   file in lines beginning with \code{#}.
 #' 
 #' @author Jon Clayden <code@@clayden.org>
 #' @seealso \code{\link{write.table}}, \code{\link{readAffine}}
 #' @export
-writeAffine <- function (affine, fileName)
+writeAffine <- function (affine, fileName, comments = TRUE)
 {
     if (!isAffine(affine))
         stop("Specified affine matrix is not valid")
     
     lines <- apply(format(affine,scientific=FALSE), 1, paste, collapse="  ")
-    lines <- c("# affineType: niftyreg", lines)
+    if (comments)
+        lines <- c("# affineType: niftyreg", lines)
     writeLines(lines, fileName)
 }
 
@@ -190,12 +213,14 @@ convertAffine <- function (affine, source = NULL, target = NULL, newType = c("ni
     sourceScaling <- diag(c(sqrt(colSums(sourceXform[1:3,1:3]^2)), 1))
     targetScaling <- diag(c(sqrt(colSums(targetXform[1:3,1:3]^2)), 1))
     
+    # NiftyReg transforms convert world coordinates from target to source space
+    # FSL transforms convert pseudo-world coordinates (scaled only) from source to target space
     if (newType == "fsl")
         newAffine <- targetScaling %*% solve(targetXform) %*% solve(affine) %*% sourceXform %*% solve(sourceScaling)
     else
         newAffine <- sourceXform %*% solve(sourceScaling) %*% solve(affine) %*% targetScaling %*% solve(targetXform)
     
-    return (structure(newAffine, class="affine", source=source, target=target))
+    return (asAffine(newAffine, source, target))
 }
 
 
@@ -221,7 +246,7 @@ invertAffine <- function (affine)
         stop("Specified affine matrix is not valid")
     
     newAffine <- solve(affine)
-    return (structure(newAffine, class="affine", source=attr(affine,"target"), target=attr(affine,"source")))
+    return (asAffine(newAffine, attr(affine,"target"), attr(affine,"source")))
 }
 
 
@@ -265,6 +290,8 @@ buildAffine <- function (translation = c(0,0,0), scales = c(1,1,1), skews = c(0,
     else
         x <- list(translation=translation, scales=scales, skews=skews, angles=angles)
     
+    if (any(x$scales == 0))
+        stop("Scales should not be zero")
     if (length(x$scales) < 3)
         x$scales <- c(x$scales, rep(1,3-length(x$scales)))
     for (name in c("translation","skews","angles"))
@@ -275,12 +302,12 @@ buildAffine <- function (translation = c(0,0,0), scales = c(1,1,1), skews = c(0,
     
     if (is.null(target))
     {
-        if (all(x$scales == 1))
+        if (all(abs(x$scales) == 1))
             target <- source
         else
         {
-            target <- .Call("rescaleImage", source, x$scales[1:ndim(source)], PACKAGE="RNiftyReg")
-            x$scales <- c(1,1,1)
+            target <- .Call("rescaleImage", source, abs(x$scales[1:ndim(source)]), PACKAGE="RNiftyReg")
+            x$scales <- sign(x$scales)
         }
     }
     else
@@ -318,45 +345,48 @@ buildAffine <- function (translation = c(0,0,0), scales = c(1,1,1), skews = c(0,
     
     affine[4,] <- c(0,0,0,1)
     
-    return (structure(affine, class="affine", source=source, target=target))
+    return (asAffine(affine, source, target))
 }
 
 
 #' Decompose an affine matrix into its constituent transformations
 #' 
 #' An affine matrix is composed of translation, scale, skew and rotation
-#' transformations. This function extracts these components.
+#' transformations. This function extracts these components, after first
+#' inverting the matrix so that it transforms from source to target space.
 #' 
 #' @param affine A 4x4 matrix representing an affine transformation matrix.
 #' @return A list with components:
-#'   \item{scaleMatrix}{A 3x3 matrix representing only the scale operation
-#'     embodied in the full affine transformation.}
-#'   \item{skewMatrix}{A 3x3 matrix representing only the skew operation
-#'     embodied in the full affine transformation.}
-#'   \item{rotationMatrix}{A 3x3 matrix representing only the rotation
-#'     operation embodied in the full affine transformation.}
-#'   \item{translation}{A length-3 named numeric vector representing the
-#'     translations (in \code{\link{pixunits}} units) in each of the X, Y and Z
-#'     directions.}
-#'   \item{scales}{A length-3 named numeric vector representing the scale
-#'     factors in each of the X, Y and Z directions. Scale factors of 1
-#'     represent no effect.}
-#'   \item{skews}{A length-3 named numeric vector representing the skews in
-#'     each of the XY, XZ and YZ planes.}
-#'   \item{angles}{A length-3 named numeric vector representing the rotation
-#'     angles (in radians) about each of the X, Y and Z directions, i.e., roll,
-#'     pitch and yaw.}
+#'   \describe{
+#'     \item{scaleMatrix}{A 3x3 matrix representing only the scale operation
+#'       embodied in the full affine transformation.}
+#'     \item{skewMatrix}{A 3x3 matrix representing only the skew operation
+#'       embodied in the full affine transformation.}
+#'     \item{rotationMatrix}{A 3x3 matrix representing only the rotation
+#'       operation embodied in the full affine transformation.}
+#'     \item{translation}{A length-3 named numeric vector representing the
+#'       translations (in \code{\link{pixunits}} units) in each of the X, Y and
+#'       Z directions.}
+#'     \item{scales}{A length-3 named numeric vector representing the scale
+#'       factors in each of the X, Y and Z directions. Scale factors of 1
+#'       represent no effect.}
+#'     \item{skews}{A length-3 named numeric vector representing the skews in
+#'       each of the XY, XZ and YZ planes.}
+#'     \item{angles}{A length-3 named numeric vector representing the rotation
+#'       angles (in radians) about each of the X, Y and Z directions, i.e.,
+#'       roll, pitch and yaw.}
+#'   }
 #' 
 #' @note The decomposition is not perfect, and there is one particular
 #'   degenerate case when the pitch angle is very close to \code{pi/2} radians,
 #'   known as ``Gimbal lock''. In this case the yaw angle is arbitrarily set to
 #'   zero.
-#' 
-#' Affine matrices embodying rigid-body transformations include only 6 degrees
-#' of freedom, rather than the full 12, so skews will always be zero and scales
-#' will always be unity (to within rounding error). Likewise, affine matrices
-#' derived from 2D registration will not include components relating to the Z
-#' direction.
+#'   
+#'   Affine matrices embodying rigid-body transformations include only 6
+#'   degrees of freedom, rather than the full 12, so skews will always be zero
+#'   and scales will always be unity (to within rounding error). Likewise,
+#'   affine matrices derived from 2D registration will not include components
+#'   relating to the Z direction.
 #' 
 #' @author Jon Clayden <code@@clayden.org>
 #' @seealso \code{\link{buildAffine}}, \code{\link{isAffine}}

@@ -72,9 +72,11 @@ protected:
     void copy (const Block &source);
     
     void initFromNiftiS4 (const Rcpp::RObject &object, const bool copyData = true);
-    void initFromArray (const Rcpp::RObject &object);
+    void initFromList (const Rcpp::RObject &object);
+    void initFromArray (const Rcpp::RObject &object, const bool copyData = true);
     
-    void updatePixdim (const std::vector<float> pixdim);
+    void updatePixdim (const std::vector<float> &pixdim);
+    void setPixunits (const std::vector<std::string> &pixunits);
     
 public:
     NiftiImage ()
@@ -138,6 +140,7 @@ public:
     }
     
     bool isNull () const { return (image == NULL); }
+    bool isPersistent () const { return persistent; }
     int nDims () const
     {
         if (image == NULL)
@@ -157,7 +160,7 @@ public:
         return *this;
     }
     
-    void rescale (const std::vector<float> scales);
+    void rescale (const std::vector<float> &scales);
     void update (const SEXP array);
     
     mat44 xform (const bool preferQuaternion = true) const;
@@ -172,6 +175,7 @@ public:
     
     Rcpp::RObject toArray () const;
     Rcpp::RObject toPointer (const std::string label) const;
+    Rcpp::RObject toArrayOrPointer (const bool internal, const std::string label) const;
     Rcpp::RObject headerToList () const;
 };
 
