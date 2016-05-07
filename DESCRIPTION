@@ -1,13 +1,13 @@
 Package: RNiftyReg
-Version: 2.2.0
-Date: 2016-03-02
+Version: 2.3.0
+Date: 2016-05-06
 Title: Image Registration Using the NiftyReg Library
 Author: Jon Clayden, based on original code by Marc Modat, Pankaj Daga and
     others
 Maintainer: Jon Clayden <code@clayden.org>
-Imports: Rcpp (>= 0.11.0), ore, splines, stats, utils
+Imports: Rcpp (>= 0.11.0), ore
 Suggests: jpeg, png, mmand, testthat (>= 0.11.0)
-Enhances: oro.nifti
+Enhances: oro.nifti, tractor.base
 LinkingTo: Rcpp, RcppEigen
 Description: Provides an R interface to the NiftyReg image registration tools
     <http://sourceforge.net/projects/niftyreg/>. Linear and nonlinear registration
@@ -18,6 +18,6 @@ BugReports: https://github.com/jonclayden/RNiftyReg/issues
 Encoding: UTF-8
 RoxygenNote: 5.0.1
 NeedsCompilation: yes
-Packaged: 2016-03-02 11:52:28 UTC; jon
+Packaged: 2016-05-06 15:07:53 UTC; jon
 Repository: CRAN
-Date/Publication: 2016-03-03 14:38:21
+Date/Publication: 2016-05-07 01:35:26

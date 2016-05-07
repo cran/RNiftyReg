@@ -63,6 +63,16 @@ public:
         return codes;
     }
     
+    static short sexpTypeToNiftiType (const int sexpType)
+    {
+        if (sexpType == INTSXP || sexpType == LGLSXP)
+            return DT_INT32;
+        else if (sexpType == REALSXP)
+            return DT_FLOAT64;
+        else
+            throw std::runtime_error("Array elements must be numeric");
+    }
+    
 protected:
     nifti_image *image;
     bool persistent;
@@ -72,6 +82,7 @@ protected:
     void copy (const Block &source);
     
     void initFromNiftiS4 (const Rcpp::RObject &object, const bool copyData = true);
+    void initFromMriImage (const Rcpp::RObject &object, const bool copyData = true);
     void initFromList (const Rcpp::RObject &object);
     void initFromArray (const Rcpp::RObject &object, const bool copyData = true);
     
