@@ -37,11 +37,15 @@
 #'   dimensionality than \code{target}, transformations which are not
 #'   explicitly initialised will begin from the result of the previous
 #'   registration.
-#' @param internal If \code{FALSE}, the default, the returned image will be
-#'   returned as a standard R array. If \code{TRUE}, it will instead be an
-#'   object of class \code{"internalImage"}, containing only basic metadata and
-#'   a C-level pointer to the full image. (See also \code{\link{readNifti}}.)
-#'   This can occasionally be useful to save memory.
+#' @param internal If \code{NA}, the default, the final resampled image will be
+#'   returned as a standard R array, but control point maps will be objects of
+#'   class \code{"internalImage"}, containing only basic metadata and a C-level
+#'   pointer to the full image. (See also \code{\link{readNifti}}.) If
+#'   \code{TRUE}, all image-type objects in the result will be internal images;
+#'   if \code{FALSE}, they will all be R arrays. The default is fine for most
+#'   purposes, but using \code{TRUE} may save memory, while using \code{FALSE}
+#'   can be necessary if there is a chance that external pointers will be
+#'   invalidated, for example when returning from worker threads.
 #' @param ... Further arguments to \code{\link{niftyreg.linear}} or
 #'   \code{\link{niftyreg.nonlinear}}.
 #' @param x A \code{"niftyreg"} object.
@@ -90,7 +94,7 @@
 #' \code{\link{niftyreg.nonlinear}} for references relating to each type of
 #' registration.
 #' @export
-niftyreg <- function (source, target, scope = c("affine","rigid","nonlinear"), init = NULL, sourceMask = NULL, targetMask = NULL, symmetric = TRUE, interpolation = 3L, estimateOnly = FALSE, sequentialInit = FALSE, internal = FALSE, ...)
+niftyreg <- function (source, target, scope = c("affine","rigid","nonlinear"), init = NULL, sourceMask = NULL, targetMask = NULL, symmetric = TRUE, interpolation = 3L, estimateOnly = FALSE, sequentialInit = FALSE, internal = NA, ...)
 {
     if (missing(source) || missing(target))
         stop("Source and target images must be given")
@@ -167,13 +171,13 @@ niftyreg <- function (source, target, scope = c("affine","rigid","nonlinear"), i
 #' (2014). Global image registration using a symmetric block-matching approach.
 #' Journal of Medical Imaging 1(2):024003.
 #' @export
-niftyreg.linear <- function (source, target, scope = c("affine","rigid"), init = NULL, sourceMask = NULL, targetMask = NULL, symmetric = TRUE, nLevels = 3L, maxIterations = 5L, useBlockPercentage = 50L, interpolation = 3L, verbose = FALSE, estimateOnly = FALSE, sequentialInit = FALSE, internal = FALSE)
+niftyreg.linear <- function (source, target, scope = c("affine","rigid"), init = NULL, sourceMask = NULL, targetMask = NULL, symmetric = TRUE, nLevels = 3L, maxIterations = 5L, useBlockPercentage = 50L, interpolation = 3L, verbose = FALSE, estimateOnly = FALSE, sequentialInit = FALSE, internal = NA)
 {
     if (missing(source) || missing(target))
         stop("Source and target images must be given")
     
-    source <- .Call("retrieveImage", source, PACKAGE="RNiftyReg")
-    target <- .Call("retrieveImage", target, PACKAGE="RNiftyReg")
+    source <- retrieveNifti(source)
+    target <- retrieveNifti(target)
     nSourceDim <- ndim(source)
     nTargetDim <- ndim(target)
     
@@ -283,13 +287,13 @@ niftyreg.linear <- function (source, target, scope = c("affine","rigid"), init =
 #' processing units. Computer Methods and Programs in Biomedicine
 #' 98(3):278-284.
 #' @export
-niftyreg.nonlinear <- function (source, target, init = NULL, sourceMask = NULL, targetMask = NULL, symmetric = TRUE, nLevels = 3L, maxIterations = 150L, nBins = 64L, bendingEnergyWeight = 0.001, linearEnergyWeight = 0.01, jacobianWeight = 0, finalSpacing = c(5,5,5), spacingUnit = c("voxel","world"), interpolation = 3L, verbose = FALSE, estimateOnly = FALSE, sequentialInit = FALSE, internal = FALSE)
+niftyreg.nonlinear <- function (source, target, init = NULL, sourceMask = NULL, targetMask = NULL, symmetric = TRUE, nLevels = 3L, maxIterations = 150L, nBins = 64L, bendingEnergyWeight = 0.001, linearEnergyWeight = 0.01, jacobianWeight = 0, finalSpacing = c(5,5,5), spacingUnit = c("voxel","world"), interpolation = 3L, verbose = FALSE, estimateOnly = FALSE, sequentialInit = FALSE, internal = NA)
 {
     if (missing(source) || missing(target))
         stop("Source and target images must be given")
     
-    source <- .Call("retrieveImage", source, PACKAGE="RNiftyReg")
-    target <- .Call("retrieveImage", target, PACKAGE="RNiftyReg")
+    source <- retrieveNifti(source)
+    target <- retrieveNifti(target)
     nSourceDim <- ndim(source)
     nTargetDim <- ndim(target)
     

@@ -27,15 +27,10 @@ An array or internal image, with class \code{"niftiImage"}, and
 }
 \description{
 This function reads one or more NIfTI-1 files into R, using the standard
-NIfTI-1 C library.
+NIfTI-1 C library. It extends the equivalent function from the \code{RNifti}
+package with source and target image parameters.
 }
 \author{
 Jon Clayden <code@clayden.org>
-}
-\references{
-The NIfTI-1 standard (\url{http://nifti.nimh.nih.gov/nifti-1}).
-}
-\seealso{
-\code{\link{writeNifti}}
 }
 
