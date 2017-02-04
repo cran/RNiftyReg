@@ -24,7 +24,42 @@ BEGIN_RCPP
 END_RCPP
 }
 
-void checkImages (const NiftiImage &sourceImage, const NiftiImage &targetImage)
+bool isMultichannel (const NiftiImage &image)
+{
+    // Assume 2D RGB or RGBA image
+    return (image.nDims() == 3 && (image->nz == 3 || image->nz == 4));
+}
+
+NiftiImage collapseChannels (const NiftiImage &image)
+{
+    if (isMultichannel(image))
+    {
+        std::vector<double> red = image.slice(0).getData<double>();
+        const std::vector<double> green = image.slice(1).getData<double>();
+        const std::vector<double> blue = image.slice(2).getData<double>();
+        
+        for (size_t i=0; i<red.size(); i++)
+            red[i] = (red[i] + green[i] + blue[i]) / 3.0;
+        
+        nifti_image *result = nifti_copy_nim_info(image);
+        result->dim[0] = image->dim[0] - 1;
+        result->dim[image->dim[0]] = 1;
+        result->pixdim[image->dim[0]] = 1.0;
+        nifti_update_dims_from_array(result);
+        
+        result->datatype = DT_FLOAT64;
+        nifti_datatype_sizes(result->datatype, &result->nbyper, &result->swapsize);
+        
+        result->data = calloc(result->nvox, 8);
+        std::copy(red.begin(), red.end(), static_cast<double *>(result->data));
+        
+        return NiftiImage(result);
+    }
+    else
+        return image;
+}
+
+void checkImages (NiftiImage &sourceImage, NiftiImage &targetImage)
 {
     if (sourceImage.isNull())
         throw std::runtime_error("Cannot read or retrieve source image");
@@ -41,6 +76,20 @@ void checkImages (const NiftiImage &sourceImage, const NiftiImage &targetImage)
         throw std::runtime_error("Source image should have 2, 3 or 4 dimensions");
     if (nTargetDim < 2 || nTargetDim > 3)
         throw std::runtime_error("Target image should have 2 or 3 dimensions");
+    
+    const std::vector<int> sourceDims = sourceImage.dim();
+    const std::vector<int> targetDims = targetImage.dim();
+    
+    for (int i=0; i<std::min(nSourceDim,nTargetDim); i++)
+    {
+        if (sourceDims[i] < 4 && (i < (nSourceDim-1) || !isMultichannel(sourceImage)))
+            throw std::runtime_error("Source image should have width at least 4 in all dimensions");
+    }
+    for (int i=0; i<nTargetDim; i++)
+    {
+        if (targetDims[i] < 4 && (i < (nTargetDim-1) || !isMultichannel(targetImage)))
+            throw std::runtime_error("Target image should have width at least 4 in all dimensions");
+    }
 }
 
 RcppExport SEXP calculateMeasure (SEXP _source, SEXP _target, SEXP _targetMask, SEXP _interpolation)
@@ -118,6 +167,10 @@ BEGIN_RCPP
     
     checkImages(sourceImage.drop(), targetImage.drop());
     
+    // Collapse the target image if necessary
+    if (isMultichannel(targetImage))
+        targetImage = collapseChannels(targetImage);
+    
     const LinearTransformScope scope = (as<int>(_type) == TYPE_AFFINE ? AffineScope : RigidScope);
     const int interpolation = as<int>(_interpolation);
     const bool symmetric = as<bool>(_symmetric);
@@ -153,19 +206,49 @@ BEGIN_RCPP
         
         return returnValue;
     }
+    else if (isMultichannel(sourceImage))
+    {
+        NiftiImage finalImage = allocateMultiregResult(sourceImage, targetImage, interpolation != 0);
+        NiftiImage collapsedSource = collapseChannels(sourceImage);
+        AffineMatrix initAffine;
+        if (!Rf_isNull(init[0]))
+            initAffine = AffineMatrix(SEXP(init[0]));
+        else
+            initAffine = AffineMatrix(collapsedSource, targetImage);
+        
+        AladinResult mainResult = regAladin(collapsedSource, targetImage, scope, symmetric, as<int>(_nLevels), as<int>(_maxIterations), as<int>(_useBlockPercentage), as<int>(_interpolation), sourceMask, targetMask, initAffine, as<bool>(_verbose), estimateOnly);
+        
+        const int nReps = (estimateOnly ? 0 : sourceImage.nBlocks());
+        for (int i=0; i<nReps; i++)
+        {
+            NiftiImage currentSource = sourceImage.block(i);
+            
+            AladinResult result = regAladin(currentSource, targetImage, scope, symmetric, 0, as<int>(_maxIterations), as<int>(_useBlockPercentage), as<int>(_interpolation), sourceMask, targetMask, mainResult.forwardTransform, as<bool>(_verbose), estimateOnly);
+            
+            finalImage.block(i) = result.image;
+        }
+        
+        returnValue["image"] = finalImage.toArrayOrPointer(internalOutput, "Result image");
+        returnValue["forwardTransforms"] = List::create(mainResult.forwardTransform);
+        if (symmetric)
+            returnValue["reverseTransforms"] = List::create(mainResult.reverseTransform);
+        else
+            returnValue["reverseTransforms"] = R_NilValue;
+        returnValue["iterations"] = List::create(mainResult.iterations);
+        returnValue["source"] = List::create(collapsedSource.toArrayOrPointer(internalInput, "Source image"));
+        returnValue["target"] = targetImage.toArrayOrPointer(internalInput, "Target image");
+        
+        return returnValue;
+    }
     else if (sourceImage.nDims() - targetImage.nDims() == 1)
     {
-        const int nReps = sourceImage->dim[sourceImage.nDims()];
+        const int nReps = sourceImage.nBlocks();
         List forwardTransforms(nReps), reverseTransforms(nReps), iterations(nReps), sourceImages(nReps);
         NiftiImage finalImage = allocateMultiregResult(sourceImage, targetImage, interpolation != 0);
         AladinResult result;
         for (int i=0; i<nReps; i++)
         {
-            NiftiImage currentSource;
-            if (sourceImage.nDims() == 3)
-                currentSource = sourceImage.slice(i);
-            else
-                currentSource = sourceImage.volume(i);
+            NiftiImage currentSource = sourceImage.block(i);
             sourceImages[i] = currentSource.toArrayOrPointer(internalInput, "Source image");
             
             AffineMatrix initAffine;
@@ -178,10 +261,7 @@ BEGIN_RCPP
             
             result = regAladin(currentSource, targetImage, scope, symmetric, as<int>(_nLevels), as<int>(_maxIterations), as<int>(_useBlockPercentage), interpolation, sourceMask, targetMask, initAffine, as<bool>(_verbose), estimateOnly);
             
-            if (sourceImage.nDims() == 3)
-                finalImage.slice(i) = result.image;
-            else
-                finalImage.volume(i) = result.image;
+            finalImage.block(i) = result.image;
             
             forwardTransforms[i] = result.forwardTransform;
             if (symmetric)
@@ -221,6 +301,10 @@ BEGIN_RCPP
     NiftiImage targetMask(_targetMask);
     
     checkImages(sourceImage.drop(), targetImage.drop());
+    
+    // Collapse the target image if necessary
+    if (isMultichannel(targetImage))
+        targetImage = collapseChannels(targetImage);
     
     const int interpolation = as<int>(_interpolation);
     const bool symmetric = as<bool>(_symmetric);
@@ -264,19 +348,57 @@ BEGIN_RCPP
         
         return returnValue;
     }
+    else if (isMultichannel(sourceImage))
+    {
+        NiftiImage finalImage = allocateMultiregResult(sourceImage, targetImage, interpolation != 0);
+        NiftiImage collapsedSource = collapseChannels(sourceImage);
+        AffineMatrix initAffine;
+        NiftiImage initControl;
+        if (!Rf_isNull(init[0]))
+        {
+            // NB: R code must set the class of an affine appropriately
+            RObject initObject(init[0]);
+            if (initObject.inherits("affine"))
+                initAffine = AffineMatrix(SEXP(initObject));
+            else
+                initControl = NiftiImage(SEXP(init[0]));
+        }
+        else
+            initAffine = AffineMatrix(collapsedSource, targetImage);
+        
+        F3dResult mainResult = regF3d(collapsedSource, targetImage, as<int>(_nLevels), as<int>(_maxIterations), interpolation, sourceMask, targetMask, initControl, initAffine, as<int>(_nBins), as<float_vector>(_spacing), as<float>(_bendingEnergyWeight), as<float>(_linearEnergyWeight), as<float>(_jacobianWeight), symmetric, as<bool>(_verbose), estimateOnly);
+        
+        const int nReps = (estimateOnly ? 0 : sourceImage.nBlocks());
+        for (int i=0; i<nReps; i++)
+        {
+            NiftiImage currentSource = sourceImage.block(i);
+            
+            F3dResult result = regF3d(currentSource, targetImage, 0, as<int>(_maxIterations), interpolation, sourceMask, targetMask, mainResult.forwardTransform, AffineMatrix(), as<int>(_nBins), as<float_vector>(_spacing), as<float>(_bendingEnergyWeight), as<float>(_linearEnergyWeight), as<float>(_jacobianWeight), symmetric, as<bool>(_verbose), estimateOnly);
+            
+            finalImage.block(i) = result.image;
+        }
+        
+        returnValue["image"] = finalImage.toArrayOrPointer(internalOutput, "Result image");
+        returnValue["forwardTransforms"] = List::create(mainResult.forwardTransform.toArrayOrPointer(internalInput, "F3D control points"));
+        if (symmetric)
+            returnValue["reverseTransforms"] = List::create(mainResult.reverseTransform.toArrayOrPointer(internalInput, "F3D control points"));
+        else
+            returnValue["reverseTransforms"] = R_NilValue;
+        returnValue["iterations"] = List::create(mainResult.iterations);
+        returnValue["source"] = List::create(collapsedSource.toArrayOrPointer(internalInput, "Source image"));
+        returnValue["target"] = targetImage.toArrayOrPointer(internalInput, "Target image");
+        
+        return returnValue;
+    }
     else if (sourceImage.nDims() - targetImage.nDims() == 1)
     {
-        const int nReps = sourceImage->dim[sourceImage.nDims()];
+        const int nReps = sourceImage.nBlocks();
         List forwardTransforms(nReps), reverseTransforms(nReps), iterations(nReps), sourceImages(nReps);
         NiftiImage finalImage = allocateMultiregResult(sourceImage, targetImage, interpolation != 0);
         F3dResult result;
         for (int i=0; i<nReps; i++)
         {
-            NiftiImage currentSource;
-            if (sourceImage.nDims() == 3)
-                currentSource = sourceImage.slice(i);
-            else
-                currentSource = sourceImage.volume(i);
+            NiftiImage currentSource = sourceImage.block(i);
             sourceImages[i] = currentSource.toArrayOrPointer(internalInput, "Source image");
             
             AffineMatrix initAffine;
@@ -297,10 +419,7 @@ BEGIN_RCPP
             
             result = regF3d(currentSource, targetImage, as<int>(_nLevels), as<int>(_maxIterations), interpolation, sourceMask, targetMask, initControl, initAffine, as<int>(_nBins), as<float_vector>(_spacing), as<float>(_bendingEnergyWeight), as<float>(_linearEnergyWeight), as<float>(_jacobianWeight), symmetric, as<bool>(_verbose), estimateOnly);
             
-            if (sourceImage.nDims() == 3)
-                finalImage.slice(i) = result.image;
-            else
-                finalImage.volume(i) = result.image;
+            finalImage.block(i) = result.image;
             
             forwardTransforms[i] = result.forwardTransform.toArrayOrPointer(internalInput, "F3D control points");
             if (symmetric)
@@ -425,7 +544,7 @@ BEGIN_RCPP
         NiftiImage transformationImage(_transform);
         switch (reg_round(transformationImage->intent_p1))
         {
-            case SPLINE_GRID:
+            case CUB_SPLINE_GRID:
             reg_getDisplacementFromDeformation(transformationImage);
             reg_tools_multiplyValueToImage(transformationImage,transformationImage,0.5f);
             reg_getDeformationFromDisplacement(transformationImage);

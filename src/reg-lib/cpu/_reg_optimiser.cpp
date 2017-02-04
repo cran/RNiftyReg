@@ -132,8 +132,8 @@ template <class T>
 void reg_optimiser<T>::Perturbation(float length)
 {
    // initialise the randomiser
-#ifdef RNIFTYREG
-   Rcpp::RNGScope scope;
+#ifdef HAVE_R
+   GetRNGstate();
 #else
    srand(time(NULL));
 #endif
@@ -142,8 +142,8 @@ void reg_optimiser<T>::Perturbation(float length)
    // Create some perturbation for degree of freedom
    for(size_t i=0; i<this->dofNumber; ++i)
    {
-#ifdef RNIFTYREG
-      this->currentDOF[i]=this->bestDOF[i] + length * (R::unif_rand() * 2.0 - 1.0);
+#ifdef HAVE_R
+      this->currentDOF[i]=this->bestDOF[i] + length * static_cast<float>(unif_rand() * 2.0 - 1.0);
 #else
       this->currentDOF[i]=this->bestDOF[i] + length * (float)(rand() - RAND_MAX/2) / ((float)RAND_MAX/2.0f);
 #endif
@@ -152,8 +152,8 @@ void reg_optimiser<T>::Perturbation(float length)
    {
       for(size_t i=0; i<this->dofNumber_b; ++i)
       {
-#ifdef RNIFTYREG
-         this->currentDOF_b[i]=this->bestDOF_b[i] + length * (R::unif_rand() * 2.0 - 1.0);
+#ifdef HAVE_R
+         this->currentDOF_b[i]=this->bestDOF_b[i] + length * static_cast<float>(unif_rand() * 2.0 - 1.0);
 #else
          this->currentDOF_b[i]=this->bestDOF_b[i] + length * (float)(rand() % 2001 - 1000) / 1000.f;
 #endif
@@ -162,6 +162,9 @@ void reg_optimiser<T>::Perturbation(float length)
    this->StoreCurrentDOF();
    this->currentObjFunctionValue=this->bestObjFunctionValue=
                                     this->objFunc->GetObjectiveFunctionValue();
+#ifdef HAVE_R
+   PutRNGstate();
+#endif
 }
 /* *************************************************************** */
 /* *************************************************************** */
@@ -311,11 +314,15 @@ void reg_conjugateGradient<T>::Initialise(size_t nvox,
                                 gradData_b
                                );
    this->firstcall=true;
+   if(this->array1!=NULL) free(this->array1);
+   if(this->array2!=NULL) free(this->array2);
    this->array1=(T *)malloc(this->dofNumber*sizeof(T));
    this->array2=(T *)malloc(this->dofNumber*sizeof(T));
 
    if(cppData_b!=NULL && gradData_b!=NULL && nvox_b>0)
    {
+      if(this->array1_b!=NULL) free(this->array1_b);
+      if(this->array2_b!=NULL) free(this->array2_b);
       this->array1_b=(T *)malloc(this->dofNumber_b*sizeof(T));
       this->array2_b=(T *)malloc(this->dofNumber_b*sizeof(T));
    }
@@ -550,7 +557,7 @@ void reg_lbfgs<T>::Initialise(size_t nvox,
       {
          reg_print_fct_error("reg_lbfgs<T>::Initialise");
          reg_print_msg_error("Out of memory");
-         reg_exit(1);
+         reg_exit();
       }
    }
    this->oldDOF=(T *)malloc(this->dofNumber*sizeof(T));
@@ -559,7 +566,7 @@ void reg_lbfgs<T>::Initialise(size_t nvox,
    {
       reg_print_fct_error("reg_lbfgs<T>::Initialise");
       reg_print_msg_error("Out of memory");
-      reg_exit(1);
+      reg_exit();
    }
 }
 /* *************************************************************** */
@@ -584,4 +591,7 @@ void reg_lbfgs<T>::Optimise(T maxLength,
 }
 /* *************************************************************** */
 /* *************************************************************** */
+//template class reg_optimiser<float>;
+//template class reg_conjugateGradient<float>;
+//template class reg_lbfgs<float>;
 #endif // _REG_OPTIMISER_CPP

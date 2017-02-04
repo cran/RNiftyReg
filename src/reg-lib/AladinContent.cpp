@@ -1,122 +1,135 @@
-#include "Content.h"
+#include "AladinContent.h"
 
 using namespace std;
 
 /* *************************************************************** */
-Content::Content()
+AladinContent::AladinContent()
 {
-	int dim[8] = { 2, 20, 20, 1, 1, 1, 1, 1 };
-	this->CurrentFloating = nifti_make_new_nim(dim, NIFTI_TYPE_FLOAT32, true);
-	this->CurrentReference = nifti_make_new_nim(dim, NIFTI_TYPE_FLOAT32, true);
+	//int dim[8] = { 2, 20, 20, 1, 1, 1, 1, 1 };
+	//this->CurrentFloating = nifti_make_new_nim(dim, NIFTI_TYPE_FLOAT32, true);
+	//this->CurrentReference = nifti_make_new_nim(dim, NIFTI_TYPE_FLOAT32, true);
+	//this->CurrentReferenceMask = NULL;
+	//
+	this->CurrentReference = NULL;
 	this->CurrentReferenceMask = NULL;
+	this->CurrentFloating = NULL;
+	this->transformationMatrix = NULL;
+	this->blockMatchingParams = NULL;
+	this->bytes = sizeof(float);//Default
+	//
 	initVars();
 }
 /* *************************************************************** */
-Content::Content(nifti_image *CurrentReferenceIn,
-					  nifti_image *CurrentFloatingIn,
-					  int *CurrentReferenceMaskIn,
-					  mat44 *transMat,
-					  size_t bytesIn,
-					  const unsigned int currentPercentageOfBlockToUseIn,
-					  const unsigned int inlierLtsIn,
-					  int stepSizeBlockIn) :
-		CurrentReference(CurrentReferenceIn),
-		CurrentFloating(CurrentFloatingIn),
-		CurrentReferenceMask(CurrentReferenceMaskIn),
-		transformationMatrix(transMat),
-		bytes(bytesIn),
-		currentPercentageOfBlockToUse(currentPercentageOfBlockToUseIn),
-		inlierLts(inlierLtsIn),
-		stepSizeBlock(stepSizeBlockIn)
+AladinContent::AladinContent(nifti_image *CurrentReferenceIn,
+									  nifti_image *CurrentFloatingIn,
+									  int *CurrentReferenceMaskIn,
+									  mat44 *transMat,
+									  size_t bytesIn,
+									  const unsigned int currentPercentageOfBlockToUseIn,
+									  const unsigned int inlierLtsIn,
+									  int stepSizeBlockIn) :
+	CurrentReference(CurrentReferenceIn),
+	CurrentFloating(CurrentFloatingIn),
+	CurrentReferenceMask(CurrentReferenceMaskIn),
+	transformationMatrix(transMat),
+	bytes(bytesIn),
+	currentPercentageOfBlockToUse(currentPercentageOfBlockToUseIn),
+	inlierLts(inlierLtsIn),
+	stepSizeBlock(stepSizeBlockIn)
 {
 	this->blockMatchingParams = new _reg_blockMatchingParam();
 	initVars();
 }
 /* *************************************************************** */
-Content::Content(nifti_image *CurrentReferenceIn,
-					  nifti_image *CurrentFloatingIn,
-					  int *CurrentReferenceMaskIn,
-					  mat44 *transMat,
-					  size_t bytesIn) :
-		CurrentReference(CurrentReferenceIn),
-		CurrentFloating(CurrentFloatingIn),
-		CurrentReferenceMask(CurrentReferenceMaskIn),
-		transformationMatrix(transMat),
-		bytes(bytesIn)
+AladinContent::AladinContent(nifti_image *CurrentReferenceIn,
+									  nifti_image *CurrentFloatingIn,
+									  int *CurrentReferenceMaskIn,
+									  mat44 *transMat,
+									  size_t bytesIn) :
+	CurrentReference(CurrentReferenceIn),
+	CurrentFloating(CurrentFloatingIn),
+	CurrentReferenceMask(CurrentReferenceMaskIn),
+	transformationMatrix(transMat),
+	bytes(bytesIn)
 {
 	this->blockMatchingParams = NULL;
 	initVars();
 }
 /* *************************************************************** */
-Content::Content(nifti_image *CurrentReferenceIn,
-					  nifti_image *CurrentFloatingIn,
-					  int *CurrentReferenceMaskIn,
-					  size_t bytesIn,
-					  const unsigned int currentPercentageOfBlockToUseIn,
-					  const unsigned int inlierLtsIn,
-					  int stepSizeBlockIn) :
-		CurrentReference(CurrentReferenceIn),
-		CurrentFloating(CurrentFloatingIn),
-		CurrentReferenceMask(CurrentReferenceMaskIn),
-		bytes(bytesIn),
-		currentPercentageOfBlockToUse(currentPercentageOfBlockToUseIn),
-		inlierLts(inlierLtsIn),
-		stepSizeBlock(stepSizeBlockIn)
+AladinContent::AladinContent(nifti_image *CurrentReferenceIn,
+									  nifti_image *CurrentFloatingIn,
+									  int *CurrentReferenceMaskIn,
+									  size_t bytesIn,
+									  const unsigned int currentPercentageOfBlockToUseIn,
+									  const unsigned int inlierLtsIn,
+									  int stepSizeBlockIn) :
+	CurrentReference(CurrentReferenceIn),
+	CurrentFloating(CurrentFloatingIn),
+	CurrentReferenceMask(CurrentReferenceMaskIn),
+	bytes(bytesIn),
+	currentPercentageOfBlockToUse(currentPercentageOfBlockToUseIn),
+	inlierLts(inlierLtsIn),
+	stepSizeBlock(stepSizeBlockIn)
 {
+	this->transformationMatrix = NULL;
 	this->blockMatchingParams = new _reg_blockMatchingParam();
 	initVars();
 }
 /* *************************************************************** */
-Content::Content(nifti_image *CurrentReferenceIn,
-					  nifti_image *CurrentFloatingIn,
-					  int *CurrentReferenceMaskIn,
-					  size_t bytesIn) :
-		CurrentReference(CurrentReferenceIn),
-		CurrentFloating(CurrentFloatingIn),
-		CurrentReferenceMask(CurrentReferenceMaskIn),
-		bytes(bytesIn)
+AladinContent::AladinContent(nifti_image *CurrentReferenceIn,
+									  nifti_image *CurrentFloatingIn,
+									  int *CurrentReferenceMaskIn,
+									  size_t bytesIn) :
+	CurrentReference(CurrentReferenceIn),
+	CurrentFloating(CurrentFloatingIn),
+	CurrentReferenceMask(CurrentReferenceMaskIn),
+	bytes(bytesIn)
 {
+	this->transformationMatrix = NULL;
 	this->blockMatchingParams = NULL;
 	initVars();
 }
 /* *************************************************************** */
-Content::~Content()
+AladinContent::~AladinContent()
 {
-	ClearWarpedImage();
-	ClearDeformationField();
-	if (this->blockMatchingParams != NULL)
-		delete this->blockMatchingParams;
+   ClearWarpedImage();
+   ClearDeformationField();
+   if (this->blockMatchingParams != NULL)
+      delete this->blockMatchingParams;
 }
 /* *************************************************************** */
-void Content::initVars()
+void AladinContent::initVars()
 {
-	if (this->CurrentFloating != NULL && this->CurrentReference != NULL)
-		this->AllocateWarpedImage();
-	else
-		this->CurrentWarped = NULL;
+   if (this->CurrentFloating != NULL && this->CurrentReference != NULL) {
+      this->AllocateWarpedImage();
+   }
+   else {
+      this->CurrentWarped = NULL;
+   }
 
-	if (this->CurrentReference != NULL){
-		this->AllocateDeformationField(bytes);
-		refMatrix_xyz = (CurrentReference->sform_code > 0) ? (CurrentReference->sto_xyz) : (CurrentReference->qto_xyz);
-	}
-	else
-		this->CurrentDeformationField = NULL;
+   if (this->CurrentReference != NULL){
+      this->AllocateDeformationField(bytes);
+      refMatrix_xyz = (CurrentReference->sform_code > 0) ? (CurrentReference->sto_xyz) : (CurrentReference->qto_xyz);
+   }
+   else {
+      this->CurrentDeformationField = NULL;
+   }
 
-	if (this->CurrentReferenceMask == NULL && this->CurrentReference != NULL)
-		this->CurrentReferenceMask = (int *) calloc(this->CurrentReference->nx * this->CurrentReference->ny * this->CurrentReference->nz, sizeof(int));
+   if (this->CurrentReferenceMask == NULL && this->CurrentReference != NULL)
+      this->CurrentReferenceMask = (int *) calloc(this->CurrentReference->nx * this->CurrentReference->ny * this->CurrentReference->nz, sizeof(int));
 
-
-	if (this->CurrentFloating != NULL){
-		floMatrix_ijk = (CurrentFloating->sform_code > 0) ? (CurrentFloating->sto_ijk) :  (CurrentFloating->qto_ijk);
-	}
-	if (blockMatchingParams != NULL)
-		initialise_block_matching_method(CurrentReference,
-													blockMatchingParams,
-													currentPercentageOfBlockToUse,
-													inlierLts,
-													stepSizeBlock,
-													CurrentReferenceMask,
-													false);
+   if (this->CurrentFloating != NULL) {
+      floMatrix_ijk = (CurrentFloating->sform_code > 0) ? (CurrentFloating->sto_ijk) :  (CurrentFloating->qto_ijk);
+   }
+   if (blockMatchingParams != NULL) {
+      initialise_block_matching_method(CurrentReference,
+                                       blockMatchingParams,
+                                       currentPercentageOfBlockToUse,
+                                       inlierLts,
+                                       stepSizeBlock,
+                                       CurrentReferenceMask,
+                                       false);
+   }
 #ifndef NDEBUG
 	if(this->CurrentReference==NULL) reg_print_msg_debug("CurrentReference image is NULL");
 	if(this->CurrentFloating==NULL) reg_print_msg_debug("CurrentFloating image is NULL");
@@ -127,12 +140,12 @@ void Content::initVars()
 #endif
 }
 /* *************************************************************** */
-void Content::AllocateWarpedImage()
+void AladinContent::AllocateWarpedImage()
 {
 	if (this->CurrentReference == NULL || this->CurrentFloating == NULL) {
-		reg_print_fct_error( "Content::AllocateWarpedImage()");
+		reg_print_fct_error( "AladinContent::AllocateWarpedImage()");
 		reg_print_msg_error(" Reference and floating images are not defined. Exit.");
-		reg_exit(1);
+		reg_exit();
 	}
 
 	this->CurrentWarped = nifti_copy_nim_info(this->CurrentReference);
@@ -143,15 +156,15 @@ void Content::AllocateWarpedImage()
 	this->CurrentWarped->datatype = this->CurrentFloating->datatype;
 	this->CurrentWarped->nbyper = this->CurrentFloating->nbyper;
 	this->CurrentWarped->data = (void *) calloc(this->CurrentWarped->nvox, this->CurrentWarped->nbyper);
-	this->floatingDatatype = this->CurrentFloating->datatype;
+	//this->floatingDatatype = this->CurrentFloating->datatype;
 }
 /* *************************************************************** */
-void Content::AllocateDeformationField(size_t bytes)
+void AladinContent::AllocateDeformationField(size_t bytes)
 {
 	if (this->CurrentReference == NULL) {
-		reg_print_fct_error( "Content::AllocateDeformationField()");
+		reg_print_fct_error( "AladinContent::AllocateDeformationField()");
 		reg_print_msg_error("Reference image is not defined. Exit.");
-		reg_exit(1);
+		reg_exit();
 	}
 	//ClearDeformationField();
 
@@ -177,33 +190,35 @@ void Content::AllocateDeformationField(size_t bytes)
 	else if (bytes == 8)
 		this->CurrentDeformationField->datatype = NIFTI_TYPE_FLOAT64;
 	else {
-		reg_print_fct_error( "Content::AllocateDeformationField()");
+		reg_print_fct_error( "AladinContent::AllocateDeformationField()");
 		reg_print_msg_error( "Only float or double are expected for the deformation field. Exit.");
-		reg_exit(1);
+		reg_exit();
 	}
 	this->CurrentDeformationField->scl_slope = 1.f;
 	this->CurrentDeformationField->scl_inter = 0.f;
 	this->CurrentDeformationField->data = (void *) calloc(this->CurrentDeformationField->nvox, this->CurrentDeformationField->nbyper);
-	return;
 }
 /* *************************************************************** */
-void Content::setCaptureRange(const int voxelCaptureRangeIn)
+void AladinContent::setCaptureRange(const int voxelCaptureRangeIn)
 {
 	this->blockMatchingParams->voxelCaptureRange = voxelCaptureRangeIn;
 }
 /* *************************************************************** */
-void Content::ClearDeformationField()
+void AladinContent::ClearDeformationField()
 {
 	if (this->CurrentDeformationField != NULL)
 		nifti_image_free(this->CurrentDeformationField);
 	this->CurrentDeformationField = NULL;
 }
 /* *************************************************************** */
-void Content::ClearWarpedImage()
+void AladinContent::ClearWarpedImage()
 {
 	if (this->CurrentWarped != NULL)
 		nifti_image_free(this->CurrentWarped);
 	this->CurrentWarped = NULL;
 }
 /* *************************************************************** */
-
+bool AladinContent::isCurrentComputationDoubleCapable()
+{
+	return true;
+}

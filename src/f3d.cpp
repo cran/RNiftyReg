@@ -9,7 +9,7 @@
 #include "AffineMatrix.h"
 #include "DeformationField.h"
 
-F3dResult regF3d (const RNifti::NiftiImage &sourceImage, const RNifti::NiftiImage &targetImage, const int nLevels, const int maxIterations, const int interpolation, const RNifti::NiftiImage &sourceMaskImage, const RNifti::NiftiImage &targetMaskImage, const RNifti::NiftiImage &initControlPoints, const AffineMatrix &initAffine, const int nBins, const std::vector<float> &spacing, const float bendingEnergyWeight, const float linearEnergyWeight, const float jacobianWeight, const bool symmetric, const bool verbose, const bool estimateOnly)
+F3dResult regF3d (RNifti::NiftiImage &sourceImage, RNifti::NiftiImage &targetImage, const int nLevels, const int maxIterations, const int interpolation, RNifti::NiftiImage &sourceMaskImage, RNifti::NiftiImage &targetMaskImage, RNifti::NiftiImage &initControlPoints, const AffineMatrix &initAffine, const int nBins, const std::vector<float> &spacing, const float bendingEnergyWeight, const float linearEnergyWeight, const float jacobianWeight, const bool symmetric, const bool verbose, const bool estimateOnly)
 {
     // Binarise the mask images
     if (!sourceMaskImage.isNull())
@@ -89,6 +89,12 @@ F3dResult regF3d (const RNifti::NiftiImage &sourceImage, const RNifti::NiftiImag
         
         for (int i = 0; i < 3; i++)
             reg->SetSpacing(unsigned(i), PRECISION_TYPE(spacing[i]));
+        
+        for (int i = 0; i < targetImage->nt; i++)
+        {
+            reg->UseNMISetReferenceBinNumber(i, nBins);
+            reg->UseNMISetFloatingBinNumber(i, nBins);
+        }
         
         reg->SetLevelNumber(nLevels);
         reg->SetLevelToPerform(nLevels);

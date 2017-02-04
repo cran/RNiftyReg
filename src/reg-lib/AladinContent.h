@@ -1,5 +1,5 @@
-#ifndef CONTENT_H_
-#define CONTENT_H_
+#ifndef ALADINCONTENT_H_
+#define ALADINCONTENT_H_
 
 #include <ctime>
 #include <iosfwd>
@@ -9,36 +9,36 @@
 #include "Kernel.h"
 #include "_reg_blockMatching.h"
 
-class Content {
+class AladinContent {
 public:
 
-	Content();
-	Content(nifti_image *CurrentReferenceIn,
-			  nifti_image *CurrentFloatingIn,
-			  int *CurrentReferenceMaskIn,
-			  size_t byte,
-			  const unsigned int percentageOfBlocks,
-			  const unsigned int InlierLts,
-			  int BlockStepSize);
-	Content(nifti_image *CurrentReferenceIn,
-			  nifti_image *CurrentFloatingIn,
-			  int *CurrentReferenceMaskIn,
-			  size_t byte);
-	Content(nifti_image *CurrentReferenceIn,
-			  nifti_image *CurrentFloatingIn,
-			  int *CurrentReferenceMaskIn,
-			  mat44 *transMat,
-			  size_t byte,
-			  const unsigned int percentageOfBlocks,
-			  const unsigned int InlierLts,
-			  int BlockStepSize);
-	Content(nifti_image *CurrentReferenceIn,
-			  nifti_image *CurrentFloatingIn,
-			  int *CurrentReferenceMaskIn,
-			  mat44 *transMat,
-			  size_t byte);
+	AladinContent();
+	AladinContent(nifti_image *CurrentReferenceIn,
+					  nifti_image *CurrentFloatingIn,
+					  int *CurrentReferenceMaskIn,
+					  size_t byte,
+					  const unsigned int percentageOfBlocks,
+					  const unsigned int InlierLts,
+					  int BlockStepSize);
+	AladinContent(nifti_image *CurrentReferenceIn,
+					  nifti_image *CurrentFloatingIn,
+					  int *CurrentReferenceMaskIn,
+					  size_t byte);
+	AladinContent(nifti_image *CurrentReferenceIn,
+					  nifti_image *CurrentFloatingIn,
+					  int *CurrentReferenceMaskIn,
+					  mat44 *transMat,
+					  size_t byte,
+					  const unsigned int percentageOfBlocks,
+					  const unsigned int InlierLts,
+					  int BlockStepSize);
+	AladinContent(nifti_image *CurrentReferenceIn,
+					  nifti_image *CurrentFloatingIn,
+					  int *CurrentReferenceMaskIn,
+					  mat44 *transMat,
+					  size_t byte);
 
-	virtual ~Content();
+	virtual ~AladinContent();
 
 	/* *************************************************************** */
 	void AllocateWarpedImage();
@@ -65,7 +65,7 @@ public:
 	}
 	virtual nifti_image *getCurrentWarped(int = 0)
 	{
-		return CurrentWarped;
+		return this->CurrentWarped;
 	}
 	int *getCurrentReferenceMask()
 	{
@@ -75,48 +75,50 @@ public:
 	{
 		return this->transformationMatrix;
 	}
-	int getFloatingDatatype()
-	{
-		return this->floatingDatatype;
-	}
-	virtual _reg_blockMatchingParam* getBlockMatchingParams()
-	{
-		return blockMatchingParams;
+	virtual _reg_blockMatchingParam* getBlockMatchingParams() {
+		return this->blockMatchingParams;
 	}
 	//setters
 	virtual void setTransformationMatrix(mat44 *transformationMatrixIn)
 	{
-		transformationMatrix = transformationMatrixIn;
+		this->transformationMatrix = transformationMatrixIn;
 	}
 	virtual void setCurrentDeformationField(nifti_image *CurrentDeformationFieldIn)
 	{
-		CurrentDeformationField = CurrentDeformationFieldIn;
+		this->CurrentDeformationField = CurrentDeformationFieldIn;
 	}
 	virtual void setCurrentWarped(nifti_image *CurrentWarpedImageIn)
 	{
-		CurrentWarped = CurrentWarpedImageIn;
+		this->CurrentWarped = CurrentWarpedImageIn;
 	}
+
 	virtual void setCurrentReferenceMask(int *, size_t) {}
 	void setCaptureRange(const int captureRangeIn);
+	//
+	virtual void setBlockMatchingParams(_reg_blockMatchingParam* bmp) {
+		blockMatchingParams = bmp;
+	}
+
+	virtual bool isCurrentComputationDoubleCapable();
 
 protected:
-	nifti_image *CurrentDeformationField;
-	nifti_image *CurrentWarped;
-
 	nifti_image *CurrentReference;
 	nifti_image *CurrentFloating;
 	int *CurrentReferenceMask;
+
+	nifti_image *CurrentDeformationField;
+	nifti_image *CurrentWarped;
 
 	mat44 *transformationMatrix;
 	mat44 refMatrix_xyz;
 	mat44 floMatrix_ijk;
 	_reg_blockMatchingParam* blockMatchingParams;
 
-	int floatingDatatype;
+	//int floatingDatatype;
 	size_t bytes;
 	unsigned int currentPercentageOfBlockToUse;
 	unsigned int inlierLts;
 	int stepSizeBlock;
 };
 
-#endif /*CONTENT_H_*/
+#endif //ALADINCONTENT_H_
