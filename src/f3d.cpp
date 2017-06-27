@@ -3,54 +3,62 @@
 #include "_reg_f3d.h"
 #include "_reg_f3d2.h"
 
-#include "config.h"
+#include "helpers.h"
 #include "aladin.h"
 #include "f3d.h"
 #include "AffineMatrix.h"
 #include "DeformationField.h"
 
-F3dResult regF3d (RNifti::NiftiImage &sourceImage, RNifti::NiftiImage &targetImage, const int nLevels, const int maxIterations, const int interpolation, RNifti::NiftiImage &sourceMaskImage, RNifti::NiftiImage &targetMaskImage, RNifti::NiftiImage &initControlPoints, const AffineMatrix &initAffine, const int nBins, const std::vector<float> &spacing, const float bendingEnergyWeight, const float linearEnergyWeight, const float jacobianWeight, const bool symmetric, const bool verbose, const bool estimateOnly)
+using namespace RNifti;
+
+template <typename PrecisionType>
+F3dResult regF3d (const NiftiImage &sourceImage, const NiftiImage &targetImage, const int nLevels, const int maxIterations, const int interpolation, const NiftiImage &sourceMaskImage, const NiftiImage &targetMaskImage, const NiftiImage &initControlPoints, const AffineMatrix &initAffine, const int nBins, const std::vector<float> &spacing, const float bendingEnergyWeight, const float linearEnergyWeight, const float jacobianWeight, const bool symmetric, const bool verbose, const bool estimateOnly)
 {
+    F3dResult result;
+    result.source = normaliseImage(isMultichannel(sourceImage) ? collapseChannels(sourceImage) : sourceImage);
+    result.target = normaliseImage(isMultichannel(targetImage) ? collapseChannels(targetImage) : targetImage);
+    NiftiImage sourceMask(sourceMaskImage);
+    NiftiImage targetMask(targetMaskImage);
+    NiftiImage controlPoints(initControlPoints);
+    
     // Binarise the mask images
-    if (!sourceMaskImage.isNull())
-        reg_tools_binarise_image(sourceMaskImage);
-    if (!targetMaskImage.isNull())
-        reg_tools_binarise_image(targetMaskImage);
+    if (!sourceMask.isNull())
+        reg_tools_binarise_image(sourceMask);
+    if (!targetMask.isNull())
+        reg_tools_binarise_image(targetMask);
     
     // Change data types for interpolation precision if necessary
     if (interpolation != 0)
     {
-        reg_tools_changeDatatype<double>(sourceImage);
+        reg_tools_changeDatatype<double>(result.source);
         if (symmetric)
-            reg_tools_changeDatatype<double>(targetImage);
+            reg_tools_changeDatatype<double>(result.target);
     }
-    
-    F3dResult result;
     
     if (nLevels == 0)
     {
-        if (!initControlPoints.isNull())
+        if (!controlPoints.isNull())
         {
-            result.forwardTransform = initControlPoints;
-            DeformationField deformationField(targetImage, initControlPoints);
-            result.image = deformationField.resampleImage(sourceImage, interpolation);
+            result.forwardTransform = controlPoints;
+            DeformationField<PrecisionType> deformationField(result.target, controlPoints);
+            result.image = deformationField.resampleImage(result.source, interpolation);
         }
         else
         {
-            DeformationField deformationField(targetImage, initAffine);
+            DeformationField<PrecisionType> deformationField(result.target, initAffine);
             result.forwardTransform = deformationField.getFieldImage();
-            result.image = deformationField.resampleImage(sourceImage, interpolation);
+            result.image = deformationField.resampleImage(result.source, interpolation);
         }
     }
     else
     {
-        reg_f3d<PRECISION_TYPE> *reg = NULL;
+        reg_f3d<PrecisionType> *reg = NULL;
 
         // Create the reg_f3d object
         if (symmetric)
-            reg = new reg_f3d2<PRECISION_TYPE>(targetImage->nt, sourceImage->nt);
+            reg = new reg_f3d2<PrecisionType>(result.target->nt, result.source->nt);
         else
-            reg = new reg_f3d<PRECISION_TYPE>(targetImage->nt, sourceImage->nt);
+            reg = new reg_f3d<PrecisionType>(result.target->nt, result.source->nt);
         
 #ifdef _OPENMP
         const int maxThreadNumber = omp_get_max_threads();
@@ -59,22 +67,22 @@ F3dResult regF3d (RNifti::NiftiImage &sourceImage, RNifti::NiftiImage &targetIma
 #endif
 
         // Set the reg_f3d parameters
-        reg->SetReferenceImage(targetImage);
-        reg->SetFloatingImage(sourceImage);
+        reg->SetReferenceImage(result.target);
+        reg->SetFloatingImage(result.source);
         
         if (verbose)
             reg->PrintOutInformation();
         else
             reg->DoNotPrintOutInformation();
         
-        if (!sourceMaskImage.isNull())
-            reg->SetFloatingMask(sourceMaskImage);
-        if (!targetMaskImage.isNull())
-            reg->SetReferenceMask(targetMaskImage);
+        if (!sourceMask.isNull())
+            reg->SetFloatingMask(sourceMask);
+        if (!targetMask.isNull())
+            reg->SetReferenceMask(targetMask);
         
         mat44 affineMatrix;
-        if (!initControlPoints.isNull())
-            reg->SetControlPointGridImage(initControlPoints);
+        if (!controlPoints.isNull())
+            reg->SetControlPointGridImage(controlPoints);
         else
         {
             affineMatrix = initAffine;
@@ -88,9 +96,9 @@ F3dResult regF3d (RNifti::NiftiImage &sourceImage, RNifti::NiftiImage &targetIma
         reg->SetMaximalIterationNumber(maxIterations);
         
         for (int i = 0; i < 3; i++)
-            reg->SetSpacing(unsigned(i), PRECISION_TYPE(spacing[i]));
+            reg->SetSpacing(unsigned(i), PrecisionType(spacing[i]));
         
-        for (int i = 0; i < targetImage->nt; i++)
+        for (int i = 0; i < result.target->nt; i++)
         {
             reg->UseNMISetReferenceBinNumber(i, nBins);
             reg->UseNMISetFloatingBinNumber(i, nBins);
@@ -110,10 +118,10 @@ F3dResult regF3d (RNifti::NiftiImage &sourceImage, RNifti::NiftiImage &targetIma
         reg->Run();
         
         if (!estimateOnly)
-            result.image = RNifti::NiftiImage(reg->GetWarpedImage()[0]);
-        result.forwardTransform = RNifti::NiftiImage(reg->GetControlPointPositionImage());
+            result.image = NiftiImage(reg->GetWarpedImage()[0]);
+        result.forwardTransform = NiftiImage(reg->GetControlPointPositionImage());
         if (symmetric)
-            result.reverseTransform = RNifti::NiftiImage(reg->GetBackwardControlPointPositionImage());
+            result.reverseTransform = NiftiImage(reg->GetBackwardControlPointPositionImage());
         result.iterations = reg->GetCompletedIterations();
         
         // Erase the registration object
@@ -122,3 +130,9 @@ F3dResult regF3d (RNifti::NiftiImage &sourceImage, RNifti::NiftiImage &targetIma
     
     return result;
 }
+
+template
+F3dResult regF3d<float> (const NiftiImage &sourceImage, const NiftiImage &targetImage, const int nLevels, const int maxIterations, const int interpolation, const NiftiImage &sourceMaskImage, const NiftiImage &targetMaskImage, const NiftiImage &initControlPoints, const AffineMatrix &initAffine, const int nBins, const std::vector<float> &spacing, const float bendingEnergyWeight, const float linearEnergyWeight, const float jacobianWeight, const bool symmetric, const bool verbose, const bool estimateOnly);
+
+template
+F3dResult regF3d<double> (const NiftiImage &sourceImage, const NiftiImage &targetImage, const int nLevels, const int maxIterations, const int interpolation, const NiftiImage &sourceMaskImage, const NiftiImage &targetMaskImage, const NiftiImage &initControlPoints, const AffineMatrix &initAffine, const int nBins, const std::vector<float> &spacing, const float bendingEnergyWeight, const float linearEnergyWeight, const float jacobianWeight, const bool symmetric, const bool verbose, const bool estimateOnly);

@@ -12,8 +12,11 @@ struct AladinResult
     AffineMatrix forwardTransform;
     AffineMatrix reverseTransform;
     std::vector<int> iterations;
+    RNifti::NiftiImage source;
+    RNifti::NiftiImage target;
 };
 
-AladinResult regAladin (RNifti::NiftiImage &sourceImage, RNifti::NiftiImage &targetImage, const LinearTransformScope scope, const bool symmetric, const int nLevels, const int maxIterations, const int useBlockPercentage, const int interpolation, RNifti::NiftiImage &sourceMaskImage, RNifti::NiftiImage &targetMaskImage, const AffineMatrix &initAffine, const bool verbose, const bool estimateOnly);
+template <typename PrecisionType>
+AladinResult regAladin (const RNifti::NiftiImage &sourceImage, const RNifti::NiftiImage &targetImage, const LinearTransformScope scope, const bool symmetric, const int nLevels, const int maxIterations, const int useBlockPercentage, const int interpolation, const RNifti::NiftiImage &sourceMaskImage, const RNifti::NiftiImage &targetMaskImage, const AffineMatrix &initAffine, const bool verbose, const bool estimateOnly);
 
 #endif

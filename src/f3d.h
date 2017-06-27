@@ -10,8 +10,11 @@ struct F3dResult
     RNifti::NiftiImage forwardTransform;
     RNifti::NiftiImage reverseTransform;
     std::vector<int> iterations;
+    RNifti::NiftiImage source;
+    RNifti::NiftiImage target;
 };
 
-F3dResult regF3d (RNifti::NiftiImage &sourceImage, RNifti::NiftiImage &targetImage, const int nLevels, const int maxIterations, const int interpolation, RNifti::NiftiImage &sourceMaskImage, RNifti::NiftiImage &targetMaskImage, RNifti::NiftiImage &initControlPoints, const AffineMatrix &initAffine, const int nBins, const std::vector<float> &spacing, const float bendingEnergyWeight, const float linearEnergyWeight, const float jacobianWeight, const bool symmetric, const bool verbose, const bool estimateOnly);
+template <typename PrecisionType>
+F3dResult regF3d (const RNifti::NiftiImage &sourceImage, const RNifti::NiftiImage &targetImage, const int nLevels, const int maxIterations, const int interpolation, const RNifti::NiftiImage &sourceMaskImage, const RNifti::NiftiImage &targetMaskImage, const RNifti::NiftiImage &initControlPoints, const AffineMatrix &initAffine, const int nBins, const std::vector<float> &spacing, const float bendingEnergyWeight, const float linearEnergyWeight, const float jacobianWeight, const bool symmetric, const bool verbose, const bool estimateOnly);
 
 #endif

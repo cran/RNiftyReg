@@ -10,7 +10,7 @@ niftyreg.nonlinear(source, target, init = NULL, sourceMask = NULL,
   linearEnergyWeight = 0.01, jacobianWeight = 0, finalSpacing = c(5, 5,
   5), spacingUnit = c("voxel", "world"), interpolation = 3L,
   verbose = FALSE, estimateOnly = FALSE, sequentialInit = FALSE,
-  internal = NA)
+  internal = NA, precision = c("double", "single"))
 }
 \arguments{
 \item{source}{The source image, an object of class \code{"nifti"} or
@@ -92,6 +92,9 @@ if \code{FALSE}, they will all be R arrays. The default is fine for most
 purposes, but using \code{TRUE} may save memory, while using \code{FALSE}
 can be necessary if there is a chance that external pointers will be
 invalidated, for example when returning from worker threads.}
+
+\item{precision}{Working precision for the registration. Using single-
+precision may be desirable to save memory when coregistering large images.}
 }
 \value{
 See \code{\link{niftyreg}}.
@@ -133,9 +136,6 @@ Performing a linear registration first, and then initialising the
   nonlinear transformation with the result (via the \code{init} parameter),
   is highly recommended in most circumstances.
 }
-\author{
-Jon Clayden <code@clayden.org>
-}
 \references{
 The algorithm used by this function is described in the
 following publication.
@@ -152,4 +152,6 @@ processing units. Computer Methods and Programs in Biomedicine
   transformations, and \code{\link{applyTransform}} to apply them to new
   images or points.
 }
-
+\author{
+Jon Clayden <code@clayden.org>
+}

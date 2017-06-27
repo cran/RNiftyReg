@@ -18,7 +18,9 @@ skews and angles.}
 
 \item{skews}{Skews in the XY, XZ and YZ planes.}
 
-\item{angles}{Roll, pitch and yaw rotation angles, in radians.}
+\item{angles}{Roll, pitch and yaw rotation angles, in radians. If
+\code{source} is two-dimensional, a single angle will be interpreted as
+being in the plane as expected.}
 
 \item{source}{The source image for the transformation (required).}
 
@@ -42,10 +44,9 @@ This function does the opposite to \code{\link{decomposeAffine}}, building
 up an affine matrix from its components. It can be useful for testing, or
 for rescaling images.
 }
-\author{
-Jon Clayden <code@clayden.org>
-}
 \seealso{
 \code{\link{decomposeAffine}}, \code{\link{isAffine}}
 }
-
+\author{
+Jon Clayden <code@clayden.org>
+}

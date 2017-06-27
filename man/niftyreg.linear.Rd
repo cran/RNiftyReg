@@ -8,7 +8,7 @@ niftyreg.linear(source, target, scope = c("affine", "rigid"), init = NULL,
   sourceMask = NULL, targetMask = NULL, symmetric = TRUE, nLevels = 3L,
   maxIterations = 5L, useBlockPercentage = 50L, interpolation = 3L,
   verbose = FALSE, estimateOnly = FALSE, sequentialInit = FALSE,
-  internal = NA)
+  internal = NA, precision = c("double", "single"))
 }
 \arguments{
 \item{source}{The source image, an object of class \code{"nifti"} or
@@ -79,6 +79,9 @@ if \code{FALSE}, they will all be R arrays. The default is fine for most
 purposes, but using \code{TRUE} may save memory, while using \code{FALSE}
 can be necessary if there is a chance that external pointers will be
 invalidated, for example when returning from worker threads.}
+
+\item{precision}{Working precision for the registration. Using single-
+precision may be desirable to save memory when coregistering large images.}
 }
 \value{
 See \code{\link{niftyreg}}.
@@ -117,9 +120,6 @@ appropriate. In the latter case the last dimension of the resulting image is
 taken from the source image, while all other dimensions come from the
 target. One affine matrix is returned for each registration performed.
 }
-\author{
-Jon Clayden <code@clayden.org>
-}
 \references{
 The algorithm used by this function is described in the
 following publication.
@@ -135,4 +135,6 @@ Journal of Medical Imaging 1(2):024003.
   transformations, and \code{\link{applyTransform}} to apply them to new
   images or points.
 }
-
+\author{
+Jon Clayden <code@clayden.org>
+}
