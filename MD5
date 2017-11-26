@@ -1,13 +1,16 @@
-597f6bf9da4241403f9622ed460799ef *DESCRIPTION
+36d45f052021b8341c8d12e1c1a5bd79 *DESCRIPTION
 1d40a0a6a260f1ce0f5c84e9dc605816 *NAMESPACE
-c1ad60da2533da21218af7f75968193f *NEWS
+908cdcd307c40a93c195c0571a48bf42 *NEWS
 3d35bc5162fe1b325a27e227a740a8fa *R/affine.R
 e239adb267ea43cf931447ac81c20875 *R/image.R
 269c9037d700f63bd0ef9d737722caad *R/nifti.R
 8295eecc45ff8589606df9ae7abe9c41 *R/niftyreg.R
-a51f1f07a5ee36921a292478e8aa4c82 *R/transform.R
+435f5a28c4e5682c61aaf0b13e6717a3 *R/transform.R
 7ac5fa30c82e205dbbd2cce0c2674b21 *R/zzz.R
 032eff5ba3c1e970fe4417976a7fe2ff *README.md
+106c7f21790ba216093e50228e3c652c *cleanup
+5746480f74295f61d04f625abf048367 *configure
+1a02256ebde3b47b082768a7bcc5dae5 *configure.ac
 598b4a235a3823de6a49d15315cc3531 *inst/extdata/affine.txt
 307db26523b8b03fe4c799fa9e895320 *inst/extdata/control.nii.gz
 30c091d208079613a19efc08f87849de *inst/extdata/epi_t2.nii.gz
@@ -19,7 +22,7 @@ ca3ed70d5f134634e5dab152653b0021 *inst/extdata/mni_brain.nii.gz
 4487b6f461cfe608bb96f8beef57c9c0 *man/affine.Rd
 2b262dc965392db6d8848d9e025d28fe *man/applyTransform.Rd
 ed364b5e25b0f6c8a4dce35430033b1f *man/buildAffine.Rd
-260c9fcefb3789418080f219049a2557 *man/composeTransforms.Rd
+d0eab0f4ca8cc1ac48036381abe54578 *man/composeTransforms.Rd
 cf7536cf5fc8806359dfe6a8c3f32a31 *man/decomposeAffine.Rd
 496f233e676e8732f40c0c705512e286 *man/deformationField.Rd
 f6c5996d55694bf81ca232274cd42170 *man/forward.Rd
@@ -40,7 +43,8 @@ d067a5bb7971ffc1ee7c1e09fb80046a *src/AffineMatrix.cpp
 dcd6e3c2edefcbae585e5606c59c59fc *src/AffineMatrix.h
 8f2617d3e9f498a180d9856f3fb78734 *src/DeformationField.cpp
 2d58942c566f9c3f2559d44656e8b564 *src/DeformationField.h
-036791cf4a0d53024ef11eb6fb561a41 *src/Makevars
+ab48d2ba37ee3a4f562996b2c8d2d7e4 *src/Makevars.in
+e9811e4214763e35259e7caa638ddea5 *src/Makevars.win
 4fb8ebfb9d15b300a5dd024a7d91fa7b *src/RNifti.cpp
 13b0c599d90865ac12b0a45ab27fc548 *src/aladin.cpp
 249271a0980a471689a0bc76ef74a644 *src/aladin.h
@@ -48,7 +52,7 @@ dcd6e3c2edefcbae585e5606c59c59fc *src/AffineMatrix.h
 39c07b986d125c17a4a4b940fd44730d *src/f3d.h
 96c7004f5fee905829ba4a48955790b9 *src/helpers.cpp
 c2916f88b994f4366a47f3570d532553 *src/helpers.h
-20e5627b44965ffd71828a97749e16d1 *src/main.cpp
+b60bcb097be1c8165a21638e22627788 *src/main.cpp
 f31c934e1d7c3c327586080f9ca4d86d *src/nifti1_io.h
 350bc3d9b229c400f739c43c6cb4fddf *src/reg-lib/AffineDeformationFieldKernel.h
 b4a5a0e8a34d2832e0d324798d48ae43 *src/reg-lib/AladinContent.cpp
@@ -116,7 +120,7 @@ ac8a6e8a62dc24b5a3a5dac6cc67944c *src/reg-lib/cpu/_reg_tools.cpp
 75f447eadaa7a2a46567f4840c1a3417 *tests/testthat/flirt.mat
 f8b31e26780acf821686ca258febb579 *tests/testthat/test-15-affine.R
 4ca4e556c59a3745d7a44d4b82f444b9 *tests/testthat/test-20-niftyreg.R
-08736306b15d2fcc7996a9225128fa17 *tests/testthat/test-25-transform.R
+63534d2e14b84abb05c6779a97a2b7c4 *tests/testthat/test-25-transform.R
 02801e4ce2efc66b9f62976ddf765f0e *tests/testthat/test-30-multireg.R
 469afb988c001a2be13bcf7e879daf1a *tools/figures/house-bw.jpg
 b5d8c860ec502d7237607ccaa495ec21 *tools/figures/house-halfskewed.jpg
