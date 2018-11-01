@@ -402,23 +402,38 @@ BEGIN_RCPP
     
     if (points.ncol() == 2)
     {
+        // Begin at the centre of the target image
+        Eigen::Vector2d start(Rf_fround((targetImage->dim[1]-1.0) / 2.0, 0), Rf_fround((targetImage->dim[2]-1.0) / 2.0, 0));
         for (int i=0; i<points.nrow(); i++)
         {
             Eigen::Vector2d point;
             point[0] = points(i, 0);
             point[1] = points(i, 1);
-            result[i] = deformationField.findPoint(sourceImage, point, nearest);
+            result[i] = deformationField.findPoint(sourceImage, point, nearest, start);
+            
+            // Begin subsequent searches near the previous solution
+            NumericVector resultVector(result[i]);
+            start[0] = resultVector[2];
+            start[1] = resultVector[3];
         }
     }
     else if (points.ncol() == 3)
     {
+        // Begin at the centre of the target image
+        Eigen::Vector3d start(Rf_fround((targetImage->dim[1]-1.0) / 2.0, 0), Rf_fround((targetImage->dim[2]-1.0) / 2.0, 0), Rf_fround((targetImage->dim[3]-1.0) / 2.0, 0));
         for (int i=0; i<points.nrow(); i++)
         {
             Eigen::Vector3d point;
             point[0] = points(i, 0);
             point[1] = points(i, 1);
             point[2] = points(i, 2);
-            result[i] = deformationField.findPoint(sourceImage, point, nearest);
+            result[i] = deformationField.findPoint(sourceImage, point, nearest, start);
+            
+            // Begin subsequent searches near the previous solution
+            NumericVector resultVector(result[i]);
+            start[0] = resultVector[3];
+            start[1] = resultVector[4];
+            start[2] = resultVector[5];
         }
     }
     else
@@ -571,6 +586,18 @@ BEGIN_RCPP
 END_RCPP
 }
 
+RcppExport SEXP RNifti_version ()
+{
+BEGIN_RCPP
+#ifdef RNIFTI_VERSION
+    return wrap(RNIFTI_VERSION);
+#else
+    // RNIFTI_VERSION was not defined before RNifti v0.10.0, so 0 is a placeholder for everything before 10
+    return wrap(0);
+#endif
+END_RCPP
+}
+
 static R_CallMethodDef callMethods[] = {
     { "calculateMeasure",       (DL_FUNC) &calculateMeasure,    4 },
     { "regLinear",              (DL_FUNC) &regLinear,           16 },
@@ -579,6 +606,7 @@ static R_CallMethodDef callMethods[] = {
     { "transformPoints",        (DL_FUNC) &transformPoints,     3 },
     { "halfTransform",          (DL_FUNC) &halfTransform,       1 },
     { "composeTransforms",      (DL_FUNC) &composeTransforms,   2 },
+    { "RNifti_version",         (DL_FUNC) &RNifti_version,      0 },
     { NULL, NULL, 0 }
 };
 

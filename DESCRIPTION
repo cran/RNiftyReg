@@ -1,6 +1,6 @@
 Package: RNiftyReg
-Version: 2.6.1
-Date: 2017-11-25
+Version: 2.6.4
+Date: 2018-11-01
 Title: Image Registration Using the 'NiftyReg' Library
 Authors@R: c(person("Jon","Clayden",role=c("cre","aut"),email="code@clayden.org"),
              person("Marc","Modat",role="aut"),
@@ -20,11 +20,11 @@ BugReports: https://github.com/jonclayden/RNiftyReg/issues
 Encoding: UTF-8
 RoxygenNote: 6.0.1
 NeedsCompilation: yes
-Packaged: 2017-11-25 20:39:44 UTC; jon
+Packaged: 2018-11-01 17:23:08 UTC; jon
 Author: Jon Clayden [cre, aut],
   Marc Modat [aut],
   Benoit Presles [aut],
   Thanasis Anthopoulos [aut],
   Pankaj Daga [aut]
 Repository: CRAN
-Date/Publication: 2017-11-26 17:49:28 UTC
+Date/Publication: 2018-11-01 22:40:02 UTC

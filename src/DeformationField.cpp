@@ -48,43 +48,54 @@ DeformationField<PrecisionType>::DeformationField (const RNifti::NiftiImage &tar
     initImages(targetImage);
     mat44 affineMatrix = affine;
     reg_affine_getDeformationField(&affineMatrix, deformationFieldImage, compose, NULL);
+    updateData();
 }
 
 template <typename PrecisionType>
 DeformationField<PrecisionType>::DeformationField (const RNifti::NiftiImage &targetImage, RNifti::NiftiImage &transformationImage, const bool compose)
 {
-    initImages(targetImage);
-    reg_checkAndCorrectDimension(transformationImage);
-    
-    switch (reg_round(transformationImage->intent_p1))
+    if (transformationImage->intent_p1 == DEF_FIELD)
     {
-        case CUB_SPLINE_GRID:
-        reg_spline_getDeformationField(transformationImage, deformationFieldImage, NULL, compose, true);
-        break;
-        
-        case DISP_VEL_FIELD:
-        reg_getDeformationFromDisplacement(transformationImage);
-        case DEF_VEL_FIELD:
-        {
-            nifti_image *tempFlowField = deformationFieldImage;
-            reg_defField_compose(transformationImage, tempFlowField, NULL);
-            tempFlowField->intent_p1 = transformationImage->intent_p1;
-            tempFlowField->intent_p2 = transformationImage->intent_p2;
-            reg_defField_getDeformationFieldFromFlowField(tempFlowField, deformationFieldImage, false);
-            nifti_image_free(tempFlowField);
-        }
-        break;
-        
-        case SPLINE_VEL_GRID:
-        reg_spline_getDefFieldFromVelocityGrid(transformationImage, deformationFieldImage, false);
-        break;
-        
-        case DISP_FIELD:
-        reg_getDeformationFromDisplacement(transformationImage);
-        default:
-        reg_defField_compose(transformationImage, deformationFieldImage, NULL);
-        break;
+        this->targetImage = targetImage;
+        this->deformationFieldImage = transformationImage;
     }
+    else
+    {
+        initImages(targetImage);
+        reg_checkAndCorrectDimension(transformationImage);
+        
+        switch (reg_round(transformationImage->intent_p1))
+        {
+            case CUB_SPLINE_GRID:
+            reg_spline_getDeformationField(transformationImage, deformationFieldImage, NULL, compose, true);
+            break;
+            
+            case DISP_VEL_FIELD:
+            reg_getDeformationFromDisplacement(transformationImage);
+            case DEF_VEL_FIELD:
+            {
+                nifti_image *tempFlowField = deformationFieldImage;
+                reg_defField_compose(transformationImage, tempFlowField, NULL);
+                tempFlowField->intent_p1 = transformationImage->intent_p1;
+                tempFlowField->intent_p2 = transformationImage->intent_p2;
+                reg_defField_getDeformationFieldFromFlowField(tempFlowField, deformationFieldImage, false);
+                nifti_image_free(tempFlowField);
+            }
+            break;
+            
+            case SPLINE_VEL_GRID:
+            reg_spline_getDefFieldFromVelocityGrid(transformationImage, deformationFieldImage, false);
+            break;
+            
+            case DISP_FIELD:
+            reg_getDeformationFromDisplacement(transformationImage);
+            default:
+            reg_defField_compose(transformationImage, deformationFieldImage, NULL);
+            break;
+        }
+    }
+    
+    updateData();
 }
 
 template <typename PrecisionType>
@@ -130,35 +141,117 @@ RNifti::NiftiImage DeformationField<PrecisionType>::resampleImage (RNifti::Nifti
 
 template <typename PrecisionType>
 template <int Dim>
-Rcpp::NumericVector DeformationField<PrecisionType>::findPoint (const RNifti::NiftiImage &sourceImage, const Eigen::Matrix<double,Dim,1> &sourceLoc, const bool nearest) const
+Rcpp::NumericVector DeformationField<PrecisionType>::findPoint (const RNifti::NiftiImage &sourceImage, const Eigen::Matrix<double,Dim,1> &sourceLoc, const bool nearest, const Eigen::Matrix<double,Dim,1> &start) const
 {
     typedef Eigen::Matrix<double,Dim,1> Point;
     Point closestLoc = Point::Zero();
-    
-    const std::vector<double> deformationData = deformationFieldImage.getData<double>();
-    const size_t nVoxels = deformationFieldImage->nx * deformationFieldImage->ny * deformationFieldImage->nz;
+    Point centre = start;
+    Point direction = Point::Zero();
     double closestDistance = R_PosInf;
     size_t closestVoxel = 0;
-    
-    for (size_t v=0; v<nVoxels; v++)
-    {
-        Point loc;
-        for (int i=0; i<Dim; i++)
-            loc[i] = deformationData[v + i*nVoxels];
-        
-        const double currentDistance = (loc - sourceLoc).norm();
-        if (currentDistance < closestDistance)
-        {
-            closestDistance = currentDistance;
-            closestVoxel = v;
-            closestLoc = loc;
-        }
-    }
     
     std::vector<size_t> strides(Dim);
     strides[0] = 1;
     for (int i=1; i<Dim; i++)
         strides[i] = strides[i-1] * std::abs(deformationFieldImage->dim[i]);
+    
+    int stepsDone = 0;
+    double currentClosestDistance = R_PosInf;
+    while (true)
+    {
+        // If the direction is zero and we're not just starting, no improvement is possible, so stop
+        if (direction.norm() > 0.0)
+        {
+            for (int i=0; i<Dim; i++)
+            {
+                // Take a step in the best previous direction, reining it in if we step outside the deformation field
+                centre[i] += direction[i] * std::ceil(0.75 * closestDistance / std::abs(deformationFieldImage->pixdim[i+1] * direction.norm()));
+                centre[i] = std::max(0.0, std::min(centre[i], static_cast<double>(deformationFieldImage->dim[i+1]-1)));
+            }
+        }
+        else if (stepsDone > 0)
+            break;
+        
+        direction = Point::Zero();
+        
+        // Check the neighbourhood of the current location for a better option
+        for (int i=-1; i<=1; i++)
+        {
+            const int x = static_cast<int>(centre[0]) + i;
+            if (x < 0 || x >= deformationFieldImage->dim[1])
+                continue;
+            
+            for (int j=-1; j<=1; j++)
+            {
+                const int y = static_cast<int>(centre[1]) + j;
+                if (y < 0 || y >= deformationFieldImage->dim[2])
+                    continue;
+                const size_t v = x + y * strides[1];
+                
+                if (Dim == 2)
+                {
+                    Point currentLoc;
+                    currentLoc[0] = deformationData[v];
+                    currentLoc[1] = deformationData[v + nVoxels];
+                    
+                    const double currentDistance = (currentLoc - sourceLoc).norm();
+                    if (currentDistance < currentClosestDistance)
+                    {
+                        currentClosestDistance = currentDistance;
+                        closestVoxel = v;
+                        closestLoc = currentLoc;
+                        direction[0] = static_cast<double>(i);
+                        direction[1] = static_cast<double>(j);
+                    }
+                }
+                else
+                {
+                    for (int k=-1; k<=1; k++)
+                    {
+                        const int z = static_cast<int>(centre[2]) + k;
+                        if (z < 0 || z >= deformationFieldImage->dim[3])
+                            continue;
+                        const size_t w = v + z * strides[2];
+                        
+                        Point currentLoc;
+                        currentLoc[0] = deformationData[w];
+                        currentLoc[1] = deformationData[w + nVoxels];
+                        currentLoc[2] = deformationData[w + 2*nVoxels];
+                        
+                        const double currentDistance = (currentLoc - sourceLoc).norm();
+                        if (currentDistance < currentClosestDistance)
+                        {
+                            currentClosestDistance = currentDistance;
+                            closestVoxel = w;
+                            closestLoc = currentLoc;
+                            direction[0] = static_cast<double>(i);
+                            direction[1] = static_cast<double>(j);
+                            direction[2] = static_cast<double>(k);
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (currentClosestDistance == closestDistance)
+            break;
+        else if (ISNAN(currentClosestDistance))
+        {
+            Rf_warning("Deformation field distance evaluates to NaN");
+            break;
+        }
+        else
+        {
+            closestDistance = currentClosestDistance;
+            stepsDone++;
+            
+            if (stepsDone == 1000)
+            {
+                Rf_warning("Iteration limit reached while searching deformation field");
+                break;
+            }
+        }
+    }
     
     if (nearest || closestDistance == 0.0)
     {
@@ -223,19 +316,20 @@ template <typename PrecisionType>
 void DeformationField<PrecisionType>::compose (const DeformationField &otherField)
 {
     reg_defField_compose(otherField.getFieldImage(), deformationFieldImage, NULL);
+    updateData();
 }
 
 template class DeformationField<float>;
 template class DeformationField<double>;
 
 template
-Rcpp::NumericVector DeformationField<float>::findPoint (const RNifti::NiftiImage &sourceImage, const Eigen::Matrix<double,2,1> &sourceLoc, const bool nearest) const;
+Rcpp::NumericVector DeformationField<float>::findPoint (const RNifti::NiftiImage &sourceImage, const Eigen::Matrix<double,2,1> &sourceLoc, const bool nearest, const Eigen::Matrix<double,2,1> &start) const;
 
 template
-Rcpp::NumericVector DeformationField<float>::findPoint (const RNifti::NiftiImage &sourceImage, const Eigen::Matrix<double,3,1> &sourceLoc, const bool nearest) const;
+Rcpp::NumericVector DeformationField<float>::findPoint (const RNifti::NiftiImage &sourceImage, const Eigen::Matrix<double,3,1> &sourceLoc, const bool nearest, const Eigen::Matrix<double,3,1> &start) const;
 
 template
-Rcpp::NumericVector DeformationField<double>::findPoint (const RNifti::NiftiImage &sourceImage, const Eigen::Matrix<double,2,1> &sourceLoc, const bool nearest) const;
+Rcpp::NumericVector DeformationField<double>::findPoint (const RNifti::NiftiImage &sourceImage, const Eigen::Matrix<double,2,1> &sourceLoc, const bool nearest, const Eigen::Matrix<double,2,1> &start) const;
 
 template
-Rcpp::NumericVector DeformationField<double>::findPoint (const RNifti::NiftiImage &sourceImage, const Eigen::Matrix<double,3,1> &sourceLoc, const bool nearest) const;
+Rcpp::NumericVector DeformationField<double>::findPoint (const RNifti::NiftiImage &sourceImage, const Eigen::Matrix<double,3,1> &sourceLoc, const bool nearest, const Eigen::Matrix<double,3,1> &start) const;

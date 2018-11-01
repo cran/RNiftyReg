@@ -15,8 +15,15 @@ class DeformationField
 protected:
     RNifti::NiftiImage deformationFieldImage;
     RNifti::NiftiImage targetImage;
+    std::vector<double> deformationData;
+    size_t nVoxels;
     
     void initImages (const RNifti::NiftiImage &targetImage);
+    void updateData ()
+    {
+        deformationData = deformationFieldImage.getData<double>();
+        nVoxels = deformationFieldImage->nx * deformationFieldImage->ny * deformationFieldImage->nz;
+    }
     
 public:
     DeformationField () {}
@@ -30,7 +37,7 @@ public:
     RNifti::NiftiImage resampleImage (RNifti::NiftiImage &sourceImage, const int interpolation);
     
     template <int Dim>
-    Rcpp::NumericVector findPoint (const RNifti::NiftiImage &sourceImage, const Eigen::Matrix<double,Dim,1> &sourceLoc, const bool nearest) const;
+    Rcpp::NumericVector findPoint (const RNifti::NiftiImage &sourceImage, const Eigen::Matrix<double,Dim,1> &sourceLoc, const bool nearest, const Eigen::Matrix<double,Dim,1> &start) const;
     
     void compose (const DeformationField &otherField);
 };
