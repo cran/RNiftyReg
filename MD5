@@ -1,6 +1,6 @@
-75eef53bfdbfd6a72aa987d484ef7825 *DESCRIPTION
+8ebefe3e1d5d33fdebe2b96e7bbada13 *DESCRIPTION
 02e712d0d1862db8797682ab01fb7acf *NAMESPACE
-9faa4c0cb0da610012682cbc7a7aea11 *NEWS
+f5572f0dcd0133a6134024bb7f4b2818 *NEWS
 3d35bc5162fe1b325a27e227a740a8fa *R/affine.R
 e239adb267ea43cf931447ac81c20875 *R/image.R
 269c9037d700f63bd0ef9d737722caad *R/nifti.R
@@ -10,7 +10,7 @@ e239adb267ea43cf931447ac81c20875 *R/image.R
 032eff5ba3c1e970fe4417976a7fe2ff *README.md
 106c7f21790ba216093e50228e3c652c *cleanup
 5746480f74295f61d04f625abf048367 *configure
-1a02256ebde3b47b082768a7bcc5dae5 *configure.ac
+d7aa12a035151663095d8ea7389ca1f5 *configure.ac
 598b4a235a3823de6a49d15315cc3531 *inst/extdata/affine.txt
 307db26523b8b03fe4c799fa9e895320 *inst/extdata/control.nii.gz
 30c091d208079613a19efc08f87849de *inst/extdata/epi_t2.nii.gz
@@ -128,3 +128,4 @@ cbc14d8eb58d1e9805a74b2f2b000818 *tools/figures/house-skewed.jpg
 f05fbe9f29d823461a75cd4be103383f *tools/figures/house-transformed1.jpg
 745cebf3acf981bbfedf8208f73b5348 *tools/figures/house-transformed2.jpg
 625dccc4f293c875ac29db2de82c81dd *tools/figures/house.jpg
+49e74c3d41fe34182aa4b1ad534cfd18 *tools/m4/ax_openmp.m4
