@@ -1,6 +1,6 @@
-8ebefe3e1d5d33fdebe2b96e7bbada13 *DESCRIPTION
+041e4373072c679ae1eb4bd431b233fc *DESCRIPTION
 02e712d0d1862db8797682ab01fb7acf *NAMESPACE
-f5572f0dcd0133a6134024bb7f4b2818 *NEWS
+79d707c175822e77de86291208bacfaf *NEWS
 3d35bc5162fe1b325a27e227a740a8fa *R/affine.R
 e239adb267ea43cf931447ac81c20875 *R/image.R
 269c9037d700f63bd0ef9d737722caad *R/nifti.R
@@ -52,7 +52,7 @@ e9811e4214763e35259e7caa638ddea5 *src/Makevars.win
 39c07b986d125c17a4a4b940fd44730d *src/f3d.h
 96c7004f5fee905829ba4a48955790b9 *src/helpers.cpp
 c2916f88b994f4366a47f3570d532553 *src/helpers.h
-a52e8d40cee475ba9c293b01c2f494c6 *src/main.cpp
+04e007b18fe8631a6845f3756bfc6642 *src/main.cpp
 f31c934e1d7c3c327586080f9ca4d86d *src/nifti1_io.h
 350bc3d9b229c400f739c43c6cb4fddf *src/reg-lib/AffineDeformationFieldKernel.h
 b4a5a0e8a34d2832e0d324798d48ae43 *src/reg-lib/AladinContent.cpp
@@ -66,7 +66,7 @@ c26a920646b6c0d740ef0fc873954168 *src/reg-lib/Kernels.h
 0da7c788a6d1e7c0e14c434e859af0df *src/reg-lib/Platform.cpp
 e65b97d7a938db264d20dea20e6e0b54 *src/reg-lib/Platform.h
 19e9a4c8a2b0713f48e590fb4478bdad *src/reg-lib/ResampleImageKernel.h
-8501273de285c43b6b2da1006d97ef28 *src/reg-lib/_reg_aladin.cpp
+6a727811b1f8ea9dbc01a586f8933080 *src/reg-lib/_reg_aladin.cpp
 27dbe11caf6d5288da6b37e08c0523b3 *src/reg-lib/_reg_aladin.h
 7bac0efd07ae0c8e830ea295224f837d *src/reg-lib/_reg_aladin_sym.cpp
 aea430072ea3531d262ad4be53a7af56 *src/reg-lib/_reg_aladin_sym.h
