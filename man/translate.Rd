@@ -9,14 +9,11 @@
 \usage{
 translate(source, translation, ...)
 
-rescale(source, scales, anchor = c("none", "origin", "centre", "center"),
-  ...)
+rescale(source, scales, anchor = c("none", "origin", "centre", "center"), ...)
 
-skew(source, skews, anchor = c("none", "origin", "centre", "center"),
-  ...)
+skew(source, skews, anchor = c("none", "origin", "centre", "center"), ...)
 
-rotate(source, angles, anchor = c("none", "origin", "centre", "center"),
-  ...)
+rotate(source, angles, anchor = c("none", "origin", "centre", "center"), ...)
 }
 \arguments{
 \item{source}{A 2D or 3D image, in the sense of \code{\link{isImage}}.}
@@ -40,6 +37,9 @@ point remains in the same place after transformation.}
 \item{angles}{Roll, pitch and yaw rotation angles, in radians. If
 \code{source} is two-dimensional, a single angle will be interpreted as
 being in the plane as expected.}
+}
+\value{
+The transformed image.
 }
 \description{
 These functions allow simple transformations to be applied quickly, or in a
