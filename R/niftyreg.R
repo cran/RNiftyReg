@@ -182,8 +182,8 @@ niftyreg.linear <- function (source, target, scope = c("affine","rigid"), init =
     if (missing(source) || missing(target))
         stop("Source and target images must be given")
     
-    source <- retrieveNifti(source)
-    target <- retrieveNifti(target)
+    source <- asNifti(source, internal=TRUE)
+    target <- asNifti(target, internal=TRUE)
     nSourceDim <- ndim(source)
     nTargetDim <- ndim(target)
     
@@ -299,8 +299,8 @@ niftyreg.nonlinear <- function (source, target, init = NULL, sourceMask = NULL, 
     if (missing(source) || missing(target))
         stop("Source and target images must be given")
     
-    source <- retrieveNifti(source)
-    target <- retrieveNifti(target)
+    source <- asNifti(source, internal=TRUE)
+    target <- asNifti(target, internal=TRUE)
     nSourceDim <- ndim(source)
     nTargetDim <- ndim(target)
     
@@ -411,17 +411,12 @@ forward <- function (object, ...)
 
 #' @rdname forward
 #' @export
-forward.niftyreg <- function (object, i = 1, ...)
+forward.niftyreg <- function (object, i = 1L, ...)
 {
     if (is.null(object$forwardTransforms))
         return (NULL)
     else
-    {
-        result <- object$forwardTransforms[[i]]
-        attr(result, "source") <- object$source[[i]]
-        attr(result, "target") <- object$target
-        return (result)
-    }
+        return (xfmAttrib(object$forwardTransforms[[i]], object$source[[i]], object$target))
 }
 
 
@@ -435,17 +430,12 @@ reverse <- function (object, ...)
 
 #' @rdname forward
 #' @export
-reverse.niftyreg <- function (object, i = 1, ...)
+reverse.niftyreg <- function (object, i = 1L, ...)
 {
     if (is.null(object$reverseTransforms))
         return (NULL)
     else
-    {
-        result <- object$reverseTransforms[[i]]
-        attr(result, "source") <- object$target
-        attr(result, "target") <- object$source[[i]]
-        return (result)
-    }
+        return (xfmAttrib(object$reverseTransforms[[i]], object$target, object$source[[i]]))
 }
 
 

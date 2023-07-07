@@ -1,3 +1,20 @@
+# For internal use: attach relevant attributes to a transform
+# NULL attributes will not be set (as this removes them) unless remove=TRUE is specified
+xfmAttrib <- function (transform, source = NULL, target = NULL, ..., remove = FALSE)
+{
+    if (!is.null(source) && !inherits(source,"niftiImage"))
+        source <- asNifti(source, internal=TRUE)
+    if (!is.null(target) && !inherits(target,"niftiImage"))
+        source <- asNifti(target, internal=TRUE)
+    
+    attribs <- list(source=source, target=target, ...)
+    if (!remove)
+        attribs <- attribs[!sapply(attribs,is.null)]
+    result <- do.call(structure, c(list(transform),attribs))
+    return (result)
+}
+
+
 #' Calculate the deformation field for a transformation
 #' 
 #' This function is used to calculate the deformation field corresponding to a
@@ -170,46 +187,68 @@ applyTransform <- function (transform, x, interpolation = 3L, nearest = FALSE, i
 #' 
 #' These objects save a full transformation object, including source and target
 #' image metadata, to a self-contained RDS file, or load it back from such a
-#' file. This is currently only possible for linear transforms.
+#' file.
 #' 
 #' @param transform A transform, possibly obtained from \code{\link{forward}}
 #'   or \code{\link{reverse}}.
-#' @param file The filename to save to, or load from.
-#' @return \code{loadTransform} returns a deserialised transform object.
+#' @param fileName The file name to save to. If \code{NULL}, the serialised
+#'   object is returned directly instead.
+#' @param x A file name to read from, or a serialised transform object.
+#' @return \code{saveTransform} returns a serialised transform object, if no
+#'   filename is given; otherwise it is called for its side-effect of writing
+#'   to file. \code{loadTransform} returns a deserialised transform object.
 #' 
 #' @author Jon Clayden <code@@clayden.org>
 #' @seealso \code{\link{writeAffine}}, \code{\link{readAffine}}
 #' @export
-saveTransform <- function (transform, file)
+saveTransform <- function (transform, fileName = NULL)
 {
     source <- niftiHeader(attr(transform, "source"))
     target <- niftiHeader(attr(transform, "target"))
     
     if (isAffine(transform, strict=TRUE))
     {
-        transform <- structure(transform, source=NULL, target=NULL)
+        transform <- xfmAttrib(transform, remove=TRUE)
         object <- structure(list(transform=transform, source=source, target=target), class="niftyregRDS")
-        saveRDS(object, file)
     }
     else if (isImage(transform, FALSE))
-        stop("Nonlinear transforms cannot currently be serialised using this method")
+    {
+        transform <- list(image=as.array(transform), header=niftiHeader(transform), extensions=extensions(transform))
+        object <- structure(list(transform=transform, source=source, target=target), class="niftyregRDS")
+    }
     else
         stop("Specified transform is not valid")
+    
+    if (is.null(file))
+        return (object)
+    else
+        saveRDS(object, fileName)
 }
 
 
 #' @rdname saveTransform
 #' @export
-loadTransform <- function (file)
+loadTransform <- function (x)
 {
-    object <- readRDS(file)
+    if (is.character(x))
+        object <- readRDS(x)
+    else
+        object <- x
+    
     if (!inherits(object, "niftyregRDS"))
-        stop("The specified file does not contain a serialised transform")
+        stop("The specified argument does not contain a serialised transform")
     
     source <- asNifti(object$source, internal=TRUE)
     target <- asNifti(object$target, internal=TRUE)
-    transform <- structure(object$transform, source=source, target=target)
-    return (transform)
+    
+    if (is.list(object$transform))
+    {
+        transform <- asNifti(object$transform$image, object$transform$header, internal=TRUE)
+        extensions(transform) <- object$transform$extensions
+        return (xfmAttrib(transform, source, target))
+    }
+    else
+        return (xfmAttrib(object$transform, source, target))
 }
 
 

@@ -1,6 +1,6 @@
 Package: RNiftyReg
-Version: 2.7.1
-Date: 2022-11-17
+Version: 2.8.0
+Date: 2023-07-07
 Title: Image Registration Using the 'NiftyReg' Library
 Authors@R: c(person("Jon", "Clayden", role=c("cre","aut"), email="code@clayden.org", comment=c(ORCID="0000-0002-6608-0619")),
              person("Marc", "Modat", role="aut"),
@@ -9,7 +9,7 @@ Authors@R: c(person("Jon", "Clayden", role=c("cre","aut"), email="code@clayden.o
              person("Pankaj", "Daga", role="aut"))
 Maintainer: Jon Clayden <code@clayden.org>
 Imports: Rcpp, RNifti, ore
-Suggests: jpeg, loder, mmand, testthat, covr
+Suggests: jpeg, loder, mmand, tinytest, covr
 LinkingTo: Rcpp, RcppEigen, RNifti
 Description: Provides an 'R' interface to the 'NiftyReg' image registration tools
     <https://github.com/KCL-BMEIS/niftyreg>. Linear and nonlinear registration
@@ -18,13 +18,13 @@ License: GPL-2
 URL: https://github.com/jonclayden/RNiftyReg
 BugReports: https://github.com/jonclayden/RNiftyReg/issues
 Encoding: UTF-8
-RoxygenNote: 7.1.0
+RoxygenNote: 7.2.3
 NeedsCompilation: yes
-Packaged: 2022-11-17 14:44:11 UTC; jon
+Packaged: 2023-07-07 15:42:59 UTC; jon
 Author: Jon Clayden [cre, aut] (<https://orcid.org/0000-0002-6608-0619>),
   Marc Modat [aut],
   Benoit Presles [aut],
   Thanasis Anthopoulos [aut],
   Pankaj Daga [aut]
 Repository: CRAN
-Date/Publication: 2022-11-18 13:40:05 UTC
+Date/Publication: 2023-07-07 16:20:02 UTC
