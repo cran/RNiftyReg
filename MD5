@@ -1,6 +1,6 @@
-78089e6ba2697c399feb55a68da2c0b5 *DESCRIPTION
+b27da4313849f94707280eb73eeb3736 *DESCRIPTION
 2506fdc21ac11903688c2d94015593c3 *NAMESPACE
-887f8c06530010813dec9a25a019da86 *NEWS
+e7d373c9d9fda011fce0ea24db5c9c69 *NEWS
 b63d5da18a006d210c019333bf1c8491 *R/affine.R
 e239adb267ea43cf931447ac81c20875 *R/image.R
 11ac82ea32cdb450252cbd15c23625b1 *R/nifti.R
@@ -20,9 +20,9 @@ aae4dd824a4809d33d90c1e340322ba1 *inst/extdata/house_colour.png
 25b02acd13939ef3af06d348d80a54ff *inst/extdata/house_colour_large.jpg
 ca3ed70d5f134634e5dab152653b0021 *inst/extdata/mni_brain.nii.gz
 75f447eadaa7a2a46567f4840c1a3417 *inst/tinytest/flirt.mat
-065f7f7aaaea2d61f5a5d46ce12c4880 *inst/tinytest/test-15-affine.R
+c6f0e3e6d2074a183839dcc53c6bdb74 *inst/tinytest/test-15-affine.R
 d7903139fbae6e8328576e95a1d2733c *inst/tinytest/test-20-niftyreg.R
-be5c0003fb2fbfa6cafd7be558ecfded *inst/tinytest/test-25-transform.R
+2f5ad7349bd70f40c1e1aaafb95f2f46 *inst/tinytest/test-25-transform.R
 64fa4592305c6a23d65094496c60812e *inst/tinytest/test-30-multireg.R
 81640ea6456a01a82bddbc81af5ac015 *man/affine.Rd
 2b262dc965392db6d8848d9e025d28fe *man/applyTransform.Rd
