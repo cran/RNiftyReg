@@ -1,13 +1,13 @@
-242e598053ba61ed2e93ac584d450200 *DESCRIPTION
+d3a07bf34dfe37c97ba3c81753eb47cd *DESCRIPTION
 31c324a55cbafefdbc59cbcc3386663c *NAMESPACE
-73ade9a9bc23ceefae610011bde29c4d *NEWS
+2227e6da52d69233ab0cae5c40f37a3f *NEWS
 9a5f588ba07a25464c6a20cc9e636769 *R/affine.R
 e239adb267ea43cf931447ac81c20875 *R/image.R
 11ac82ea32cdb450252cbd15c23625b1 *R/nifti.R
 615cede913af1fdbf082eec0f71edffc *R/niftyreg.R
 204db3ba07292a6050da2cd8067d90d3 *R/transform.R
 5001f153bf0e5495a4d1bfb1205615a7 *R/zzz.R
-5a349a2e668833758ddb53a50d279e4c *README.md
+b2ae2e09dc328685bc7eb85ad9e8a036 *README.md
 106c7f21790ba216093e50228e3c652c *cleanup
 5746480f74295f61d04f625abf048367 *configure
 d7aa12a035151663095d8ea7389ca1f5 *configure.ac
@@ -73,7 +73,7 @@ c26a920646b6c0d740ef0fc873954168 *src/reg-lib/Kernels.h
 e65b97d7a938db264d20dea20e6e0b54 *src/reg-lib/Platform.h
 19e9a4c8a2b0713f48e590fb4478bdad *src/reg-lib/ResampleImageKernel.h
 8064a3139d121d20b29efd37e625b38b *src/reg-lib/_reg_aladin.cpp
-27dbe11caf6d5288da6b37e08c0523b3 *src/reg-lib/_reg_aladin.h
+7fb988b29079bc81d18abf7bb1990077 *src/reg-lib/_reg_aladin.h
 2701b36e985746437157d7d083b053f6 *src/reg-lib/_reg_aladin_sym.cpp
 aea430072ea3531d262ad4be53a7af56 *src/reg-lib/_reg_aladin_sym.h
 680b0a463e0bcef35cc8ec7c201efe72 *src/reg-lib/_reg_base.cpp
