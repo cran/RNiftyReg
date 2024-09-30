@@ -1,12 +1,12 @@
-d3a07bf34dfe37c97ba3c81753eb47cd *DESCRIPTION
-31c324a55cbafefdbc59cbcc3386663c *NAMESPACE
-2227e6da52d69233ab0cae5c40f37a3f *NEWS
-9a5f588ba07a25464c6a20cc9e636769 *R/affine.R
+8e7760d903ea425a831eafeb1715ad10 *DESCRIPTION
+080ea42b2a0b64f7678987dbcf9259e8 *NAMESPACE
+a766d3401606291382882a770d3a6739 *NEWS
+ad154b5d79f3f2d4d8de42bdd0707278 *R/affine.R
 e239adb267ea43cf931447ac81c20875 *R/image.R
 11ac82ea32cdb450252cbd15c23625b1 *R/nifti.R
 615cede913af1fdbf082eec0f71edffc *R/niftyreg.R
 204db3ba07292a6050da2cd8067d90d3 *R/transform.R
-5001f153bf0e5495a4d1bfb1205615a7 *R/zzz.R
+f9005bf729171f74917e199b7a63a312 *R/zzz.R
 b2ae2e09dc328685bc7eb85ad9e8a036 *README.md
 106c7f21790ba216093e50228e3c652c *cleanup
 5746480f74295f61d04f625abf048367 *configure
@@ -45,8 +45,8 @@ a3207a9e97541c8454a23205d18b9328 *man/reexports.Rd
 f91e51170b89edb0e9ba08a57ce98702 *man/similarity.Rd
 47363640a507b575ecbc770602ec36c2 *man/translate.Rd
 6ae1828546bed244f3a2b2fbded65c72 *man/writeAffine.Rd
-d067a5bb7971ffc1ee7c1e09fb80046a *src/AffineMatrix.cpp
-dcd6e3c2edefcbae585e5606c59c59fc *src/AffineMatrix.h
+1ada20a40ed6f615efd85980899fbdc3 *src/AffineMatrix.cpp
+1d1fd17b9a514c8d031ef04e419c7d73 *src/AffineMatrix.h
 52d6dde5b1f025e99c0e421a9aa290aa *src/DeformationField.cpp
 0de493004392c4cb572a7bbb124e2326 *src/DeformationField.h
 ab48d2ba37ee3a4f562996b2c8d2d7e4 *src/Makevars.in
@@ -72,7 +72,7 @@ c26a920646b6c0d740ef0fc873954168 *src/reg-lib/Kernels.h
 0da7c788a6d1e7c0e14c434e859af0df *src/reg-lib/Platform.cpp
 e65b97d7a938db264d20dea20e6e0b54 *src/reg-lib/Platform.h
 19e9a4c8a2b0713f48e590fb4478bdad *src/reg-lib/ResampleImageKernel.h
-8064a3139d121d20b29efd37e625b38b *src/reg-lib/_reg_aladin.cpp
+c7cabf1870f57863e2ec9bdb71638d2a *src/reg-lib/_reg_aladin.cpp
 7fb988b29079bc81d18abf7bb1990077 *src/reg-lib/_reg_aladin.h
 2701b36e985746437157d7d083b053f6 *src/reg-lib/_reg_aladin_sym.cpp
 aea430072ea3531d262ad4be53a7af56 *src/reg-lib/_reg_aladin_sym.h
