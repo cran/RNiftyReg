@@ -1,13 +1,13 @@
-8e7760d903ea425a831eafeb1715ad10 *DESCRIPTION
+fa8cf21ac029aab05191472fc4d62f9e *DESCRIPTION
 080ea42b2a0b64f7678987dbcf9259e8 *NAMESPACE
-a766d3401606291382882a770d3a6739 *NEWS
+745faef82ddb547a211bd49c854f3cb9 *NEWS
 ad154b5d79f3f2d4d8de42bdd0707278 *R/affine.R
 e239adb267ea43cf931447ac81c20875 *R/image.R
 11ac82ea32cdb450252cbd15c23625b1 *R/nifti.R
 615cede913af1fdbf082eec0f71edffc *R/niftyreg.R
-204db3ba07292a6050da2cd8067d90d3 *R/transform.R
+31b0e040fa4a7e96906487d39bbc54fd *R/transform.R
 f9005bf729171f74917e199b7a63a312 *R/zzz.R
-b2ae2e09dc328685bc7eb85ad9e8a036 *README.md
+71fbecb58e7c5c2cbe4327581a736e18 *README.md
 106c7f21790ba216093e50228e3c652c *cleanup
 5746480f74295f61d04f625abf048367 *configure
 d7aa12a035151663095d8ea7389ca1f5 *configure.ac
@@ -22,7 +22,7 @@ ca3ed70d5f134634e5dab152653b0021 *inst/extdata/mni_brain.nii.gz
 75f447eadaa7a2a46567f4840c1a3417 *inst/tinytest/flirt.mat
 c6f0e3e6d2074a183839dcc53c6bdb74 *inst/tinytest/test-15-affine.R
 d7903139fbae6e8328576e95a1d2733c *inst/tinytest/test-20-niftyreg.R
-83c046536a8f8ee3dc002b5e7b0a47e2 *inst/tinytest/test-25-transform.R
+07b462fca5e41923de2f756ccec5f612 *inst/tinytest/test-25-transform.R
 64fa4592305c6a23d65094496c60812e *inst/tinytest/test-30-multireg.R
 363a9fd88012b40b650ce50a5637d06c *man/affine.Rd
 2b262dc965392db6d8848d9e025d28fe *man/applyTransform.Rd
@@ -108,7 +108,7 @@ d17e6b1259b7433444bea7a56241bcd8 *src/reg-lib/cpu/_reg_localTrans_jac.h
 674f895161944e1575ca2d4e9bc05622 *src/reg-lib/cpu/_reg_localTrans_regul.h
 256de9f9b72ad3876bd098b258687d35 *src/reg-lib/cpu/_reg_macros.h
 dcd6b197ee05e0e241a6efb1630c20a6 *src/reg-lib/cpu/_reg_maths.cpp
-145d07bb5c7e50914afc589fb60398ea *src/reg-lib/cpu/_reg_maths.h
+bb7a72017baf6cd7ec8a84e2337fbb8a *src/reg-lib/cpu/_reg_maths.h
 e5a902ae57c1a8d9cb9bd60f45d915a0 *src/reg-lib/cpu/_reg_maths_eigen.cpp
 3bc83d4cf36bf484a1e5cd8dd679e940 *src/reg-lib/cpu/_reg_maths_eigen.h
 de9ff6009b7c9467023cfac0c397d117 *src/reg-lib/cpu/_reg_measure.h
