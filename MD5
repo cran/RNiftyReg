@@ -1,6 +1,6 @@
-fa8cf21ac029aab05191472fc4d62f9e *DESCRIPTION
+4ebe4acefd8c2ac7c8750e86e204fa11 *DESCRIPTION
 080ea42b2a0b64f7678987dbcf9259e8 *NAMESPACE
-745faef82ddb547a211bd49c854f3cb9 *NEWS
+c98f9e63859bb9182a89f9e0fd4c4a16 *NEWS
 ad154b5d79f3f2d4d8de42bdd0707278 *R/affine.R
 e239adb267ea43cf931447ac81c20875 *R/image.R
 11ac82ea32cdb450252cbd15c23625b1 *R/nifti.R
@@ -69,7 +69,7 @@ e637a36dc958452509cee193c7729701 *src/reg-lib/Kernel.h
 b83e8dd55081347d8b7a3e91948a353b *src/reg-lib/KernelFactory.h
 c26a920646b6c0d740ef0fc873954168 *src/reg-lib/Kernels.h
 09e8675620d49969793075af4031dea8 *src/reg-lib/OptimiseKernel.h
-0da7c788a6d1e7c0e14c434e859af0df *src/reg-lib/Platform.cpp
+a2933fa1f41c6c0dd3f235ca45a1ceef *src/reg-lib/Platform.cpp
 e65b97d7a938db264d20dea20e6e0b54 *src/reg-lib/Platform.h
 19e9a4c8a2b0713f48e590fb4478bdad *src/reg-lib/ResampleImageKernel.h
 c7cabf1870f57863e2ec9bdb71638d2a *src/reg-lib/_reg_aladin.cpp
@@ -108,7 +108,7 @@ d17e6b1259b7433444bea7a56241bcd8 *src/reg-lib/cpu/_reg_localTrans_jac.h
 674f895161944e1575ca2d4e9bc05622 *src/reg-lib/cpu/_reg_localTrans_regul.h
 256de9f9b72ad3876bd098b258687d35 *src/reg-lib/cpu/_reg_macros.h
 dcd6b197ee05e0e241a6efb1630c20a6 *src/reg-lib/cpu/_reg_maths.cpp
-bb7a72017baf6cd7ec8a84e2337fbb8a *src/reg-lib/cpu/_reg_maths.h
+6438cbbc577fe8fb2fdf18b283a43687 *src/reg-lib/cpu/_reg_maths.h
 e5a902ae57c1a8d9cb9bd60f45d915a0 *src/reg-lib/cpu/_reg_maths_eigen.cpp
 3bc83d4cf36bf484a1e5cd8dd679e940 *src/reg-lib/cpu/_reg_maths_eigen.h
 de9ff6009b7c9467023cfac0c397d117 *src/reg-lib/cpu/_reg_measure.h
